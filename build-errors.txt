@@ -1,0 +1,12 @@
+src/config/configuration.ts(69,20): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/config/configuration.ts(80,28): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/config/configuration.ts(81,28): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/database/base.schema.ts(63,11): error TS2339: Property 'id' does not exist on type '{ _id: ObjectId; } & { __v: number; }'.
+src/database/base.schema.ts(64,14): error TS2790: The operand of a 'delete' operator must be optional.
+src/database/base.schema.ts(68,14): error TS2790: The operand of a 'delete' operator must be optional.
+src/database/base.schema.ts(78,11): error TS2339: Property 'id' does not exist on type '{ _id: ObjectId; } & { __v: number; }'.
+src/database/base.schema.ts(79,14): error TS2790: The operand of a 'delete' operator must be optional.
+src/database/base.schema.ts(80,14): error TS2790: The operand of a 'delete' operator must be optional.
