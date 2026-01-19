@@ -53,6 +53,7 @@ import {
   MemoryHealthIndicator,
   HealthCheckResult,
 } from '@nestjs/terminus';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
@@ -68,6 +69,7 @@ export class HealthController {
    *
    * @returns Health check result with status of all components
    */
+  @Public()
   @Get()
   @HealthCheck()
   async check(): Promise<HealthCheckResult> {
