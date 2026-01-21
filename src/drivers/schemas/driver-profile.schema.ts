@@ -80,4 +80,4 @@ export class DriverProfile {
 export const DriverProfileSchema = SchemaFactory.createForClass(DriverProfile);
 
 // Ensure 2dsphere index is created for geospatial queries
-DriverProfileSchema.index({ currentLocation: '2dsphere' });
+// DriverProfileSchema.index({ currentLocation: '2dsphere' }); // Handled by @Prop decorator

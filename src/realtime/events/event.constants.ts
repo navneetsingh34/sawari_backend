@@ -22,6 +22,9 @@ export const RealtimeEvents = {
   BID_ACCEPTED: 'bid:accepted', // To Driver: Your bid was chosen
   BID_REJECTED: 'bid:rejected', // To Driver: Someone else won
 
+  // Location
+  LOCATION_UPDATE: 'location:update',
+
   // Live Tracking
   DRIVER_LOCATION: 'driver:location', // To Rider: Car moving
 };

@@ -9,6 +9,7 @@ export enum RideStatus {
   REQUESTED = 'REQUESTED', // Creation
   BIDDING = 'BIDDING', // (Future) Drivers bidding
   ACCEPTED = 'ACCEPTED', // Driver assigned
+  ARRIVED = 'ARRIVED', // Driver at pickup
   STARTED = 'STARTED', // Ride in progress
   COMPLETED = 'COMPLETED', // Successfully finished
   CANCELLED = 'CANCELLED', // Aborted by user/driver

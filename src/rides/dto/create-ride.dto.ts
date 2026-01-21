@@ -17,7 +17,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
-class LocationDto {
+export class LocationDto {
   @ApiProperty({ example: 12.9716, description: 'Latitude' })
   @IsNumber()
   @Min(-90)

@@ -37,6 +37,7 @@
  */
 
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { LoggerModule } from './common/logger/logger.module';
@@ -61,6 +62,9 @@ import { AdminModule } from './admin/admin.module';
     // Global configuration module
     // Loads environment variables and provides ConfigService
     ConfigModule,
+
+    // Enable Scheduled Tasks (Cron)
+    ScheduleModule.forRoot(),
 
     // Database connection module
     // Establishes MongoDB connection via Mongoose

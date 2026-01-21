@@ -38,7 +38,38 @@ export class RidesService {
     private readonly locationService: LocationService,
     private readonly realtimeService: RealtimeService,
     private readonly commissionsService: CommissionsService,
-  ) {}
+  ) { }
+
+  /**
+   * Estimate Ride Fare
+   */
+  async estimateRide(estimateDto: any) {
+    const { pickup, drop } = estimateDto;
+    const route = await this.locationService.calculateRoute(
+      pickup.latitude,
+      pickup.longitude,
+      drop.latitude,
+      drop.longitude,
+    );
+
+    const estimatedFare = this.calculateFare(route.distanceMeters);
+
+    return {
+      distanceMeters: route.distanceMeters,
+      durationSeconds: route.durationSeconds,
+      estimatedFare,
+    };
+  }
+
+  /**
+   * Calculate Fare
+   * Base Fare: 30
+   * Per Km: 12
+   */
+  private calculateFare(distanceMeters: number): number {
+    const distanceKm = distanceMeters / 1000;
+    return Math.round(30 + distanceKm * 12);
+  }
 
   /**
    * Create Ride Request (Rider)
@@ -55,8 +86,7 @@ export class RidesService {
       drop.latitude,
       drop.longitude,
     );
-    const distanceKm = route.distanceMeters / 1000;
-    const estimatedFare = Math.round(30 + distanceKm * 12);
+    const estimatedFare = this.calculateFare(route.distanceMeters);
 
     const ride = new this.rideModel({
       riderId,
@@ -111,7 +141,31 @@ export class RidesService {
 
     ride.driverId = driverId;
     ride.status = RideStatus.ACCEPTED;
-    return ride.save();
+    const savedRide = await ride.save();
+
+    // REALTIME: Notify Rider
+    this.realtimeService.updateRideStatus(rideId, RideStatus.ACCEPTED, {
+      driverId,
+    });
+
+    return savedRide;
+  }
+
+  /**
+   * Driver Arrived (Driver)
+   * Transitions: ACCEPTED -> ARRIVED
+   */
+  async driverArrived(rideId: string, driverId: string): Promise<RideDocument> {
+    const ride = await this.findById(rideId);
+    this.verifyDriver(ride, driverId);
+    this.validateTransition(ride.status, RideStatus.ARRIVED);
+
+    ride.status = RideStatus.ARRIVED;
+    const saved = await ride.save();
+
+    // REALTIME: Notify Rider
+    this.realtimeService.updateRideStatus(rideId, RideStatus.ARRIVED);
+    return saved;
   }
 
   /**
@@ -184,6 +238,7 @@ export class RidesService {
     return saved;
   }
 
+
   async findAll(userId: string, role: string, query: RideHistoryQueryDto) {
     const { page = 1, limit = 10 } = query;
     const filter =
@@ -223,8 +278,45 @@ export class RidesService {
       .exec();
   }
 
+  /**
+   * Find Active Ride (Persistence)
+   * Returns the single unfinished ride for a user (if any).
+   */
+  async findActiveRide(userId: string, role: string): Promise<RideDocument | null> {
+    const filter =
+      role === UserRole.RIDER ? { riderId: userId } : { driverId: userId };
+
+    // Active statuses: NOT Completed, NOT Cancelled
+    return this.rideModel.findOne({
+      ...filter,
+      status: {
+        $in: [
+          RideStatus.REQUESTED,
+          RideStatus.BIDDING,
+          RideStatus.ACCEPTED,
+          RideStatus.ARRIVED,
+          RideStatus.STARTED
+        ]
+      }
+    }).sort({ createdAt: -1 }); // Get most recent
+  }
+
   private async findById(id: string): Promise<RideDocument> {
     const ride = await this.rideModel.findById(id);
+    if (!ride) throw new NotFoundException('Ride not found');
+    return ride;
+  }
+
+  /**
+   * Get Ride Details with Driver/Rider Info
+   * For detail page - populates driver and rider data
+   */
+  async getRideDetails(rideId: string): Promise<RideDocument> {
+    const ride = await this.rideModel.findById(rideId)
+      .populate('riderId', 'name phone email')
+      .populate('driverId', 'name phone email')
+      .exec();
+
     if (!ride) throw new NotFoundException('Ride not found');
     return ride;
   }
@@ -260,7 +352,8 @@ export class RidesService {
         RideStatus.CANCELLED,
       ],
       [RideStatus.BIDDING]: [RideStatus.ACCEPTED, RideStatus.CANCELLED],
-      [RideStatus.ACCEPTED]: [RideStatus.STARTED, RideStatus.CANCELLED],
+      [RideStatus.ACCEPTED]: [RideStatus.ARRIVED, RideStatus.STARTED, RideStatus.CANCELLED], // Added ARRIVED. Keeping STARTED for backward compat/legacy flows if needed, but ideally ACCEPTED->ARRIVED->STARTED
+      [RideStatus.ARRIVED]: [RideStatus.STARTED, RideStatus.CANCELLED],
       [RideStatus.STARTED]: [RideStatus.COMPLETED],
     };
 
@@ -269,5 +362,38 @@ export class RidesService {
         `Invalid status transition from ${current} to ${next}`,
       );
     }
+  }
+
+  /**
+   * Get Contact Info (Call Feature)
+   * Returns the phone number of the *other* party.
+   */
+  async getRideContact(rideId: string, userId: string): Promise<{ phone: string; name: string }> {
+    const ride = await this.rideModel.findById(rideId)
+      .populate('riderId', 'phone name')
+      .populate('driverId', 'phone name');
+
+    if (!ride) throw new NotFoundException('Ride not found');
+
+    // Helper to safely get ID string whether populated or not
+    const getIsSameUser = (userOrId: any, id: string) => {
+      const uId = userOrId._id ? userOrId._id.toString() : userOrId.toString();
+      return uId === id;
+    };
+
+    // 1. If requester is Driver, return Rider's info
+    if (ride.driverId && getIsSameUser(ride.driverId, userId)) {
+      const rider = ride.riderId as any;
+      return { phone: rider.phone, name: rider.name };
+    }
+
+    // 2. If requester is Rider, return Driver's info
+    if (getIsSameUser(ride.riderId, userId)) {
+      if (!ride.driverId) throw new BadRequestException('No driver assigned yet');
+      const driver = ride.driverId as any;
+      return { phone: driver.phone, name: driver.name };
+    }
+
+    throw new ForbiddenException('Not a participant in this ride');
   }
 }

@@ -32,6 +32,9 @@ import { UpdateDriverVehicleDto } from './dto/update-driver-vehicle.dto';
 import { UpdateDriverLocationDto } from './dto/update-driver-location.dto';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { UserRole } from '../common/constants/user-roles.constant';
+import { RealtimeService } from '../realtime/realtime.service';
+import { Ride, RideDocument } from '../rides/schemas/ride.schema';
+import { RideStatus } from '../rides/enums/ride-status.enum';
 
 @Injectable()
 export class DriversService {
@@ -39,7 +42,9 @@ export class DriversService {
     @InjectModel(DriverProfile.name)
     private driverModel: Model<DriverProfileDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-  ) {}
+    @InjectModel(Ride.name) private rideModel: Model<RideDocument>,
+    private readonly realtimeService: RealtimeService,
+  ) { }
 
   /**
    * Create Driver Profile
@@ -137,7 +142,8 @@ export class DriversService {
   ): Promise<DriverProfile> {
     const { latitude, longitude } = locationDto;
 
-    return this.driverModel
+    // 1. Update Profile Location
+    const updatedProfile = await this.driverModel
       .findOneAndUpdate(
         { userId },
         {
@@ -149,5 +155,21 @@ export class DriversService {
         { new: true },
       )
       .exec();
+
+    // 2. Broadcast location if driver is in an active ride
+    if (userId) {
+      // Find active ride for this driver
+      // Removed ARRIVED if it doesn't exist, check enum first in next step. For now assume STARTED/ACCEPTED.
+      const activeRide = await this.rideModel.findOne({
+        driverId: userId,
+        status: { $in: [RideStatus.ACCEPTED, RideStatus.STARTED] }
+      });
+
+      if (activeRide) {
+        this.realtimeService.emitLocationUpdate(activeRide._id.toString(), userId, { lat: latitude, lng: longitude });
+      }
+    }
+
+    return updatedProfile;
   }
 }

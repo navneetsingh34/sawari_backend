@@ -14,7 +14,9 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
+  BadRequestException,
 } from '@nestjs/common';
+import { isValidObjectId } from 'mongoose';
 import {
   ApiTags,
   ApiOperation,
@@ -33,7 +35,7 @@ import { UserRole } from '../common/constants/user-roles.constant';
 @Controller('bids')
 @UseGuards(RolesGuard)
 export class BidsController {
-  constructor(private readonly bidsService: BidsService) {}
+  constructor(private readonly bidsService: BidsService) { }
 
   @Post()
   @Roles(UserRole.DRIVER)
@@ -49,6 +51,9 @@ export class BidsController {
   @Get('ride/:rideId')
   @ApiOperation({ summary: 'Get active bids for a ride' })
   async getBids(@Param('rideId') rideId: string) {
+    if (!isValidObjectId(rideId)) {
+      throw new BadRequestException('Invalid Ride ID');
+    }
     return this.bidsService.getBidsForRide(rideId);
   }
 
@@ -61,6 +66,9 @@ export class BidsController {
     @Body('rideId') rideId: string, // Provide rideId in body to verify ownership
     @CurrentUser('id') riderId: string,
   ) {
+    if (!isValidObjectId(bidId) || !isValidObjectId(rideId)) {
+      throw new BadRequestException('Invalid ID');
+    }
     return this.bidsService.acceptBid(riderId, rideId, bidId);
   }
 }

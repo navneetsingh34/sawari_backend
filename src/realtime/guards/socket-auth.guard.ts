@@ -45,7 +45,7 @@ export class SocketAuthGuard implements CanActivate {
 
     try {
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+        secret: this.configService.get<string>('jwt.accessTokenSecret'),
       });
 
       this.logger.debug(`Token valid for user: ${payload.sub}, role: ${payload.role}`);

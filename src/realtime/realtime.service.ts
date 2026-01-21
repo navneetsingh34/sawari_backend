@@ -68,4 +68,15 @@ export class RealtimeService {
 
     this.server.to(`user:${driverId}`).emit(event, { rideId });
   }
+
+  /**
+   * Broadcast Driver Location to Ride Room
+   */
+  emitLocationUpdate(rideId: string, driverId: string, location: { lat: number; lng: number }) {
+    if (!this.server) return;
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.LOCATION_UPDATE, {
+      driverId,
+      ...location,
+    });
+  }
 }
