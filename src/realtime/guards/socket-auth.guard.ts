@@ -33,8 +33,12 @@ export class SocketAuthGuard implements CanActivate {
     const client: Socket = context.switchToWs().getClient();
     const token = this.extractToken(client);
 
+    this.logger.debug(`Validating token for client ${client.id}`);
+    this.logger.debug(`Token: ${token ? token.substring(0, 20) + '...' : 'NONE'}`);
+
     if (!token) {
-      this.logger.warn('Socket connection attempt without token');
+      this.logger.warn(`Socket connection attempt without token - client ${client.id}`);
+      client.emit('error', { message: 'Authentication required' });
       client.disconnect();
       return false;
     }
@@ -44,11 +48,14 @@ export class SocketAuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
+      this.logger.debug(`Token valid for user: ${payload.sub}, role: ${payload.role}`);
+      
       // Attach user to socket instance for future use
       client.data.user = payload;
       return true;
     } catch (err) {
-      this.logger.error(`Socket auth failed: ${err.message}`);
+      this.logger.error(`Socket auth failed for client ${client.id}: ${err.message}`);
+      client.emit('error', { message: 'Invalid token', details: err.message });
       client.disconnect();
       return false;
     }

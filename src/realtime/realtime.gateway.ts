@@ -51,18 +51,18 @@ export class RealtimeGateway
   // Handle Connection manually to apply global logic
   async handleConnection(client: Socket) {
     try {
-      // Manually run auth logic since @UseGuards doesn't work on handleConnection
-      // We simulate the context or just reuse the logic
-      // Ideally, middleware is better, but this works for simple setup
       const token =
         client.handshake.auth?.token || client.handshake.headers.authorization;
-      // Note: Full auth validation is complex here without injecting JwtService directly into Gateway if strictly separating
-      // For simplicity/speed in Step 7, we rely on the Guard protecting specific EVENTS,
-      // OR we just perform a basic integrity check if we injected JwtService.
-      // However, to be robust, let's allow connection but restrict room joining.
-
+      
       this.logger.log(`Client connected: ${client.id}`);
+      this.logger.debug(`Token received: ${token ? 'Yes' : 'No'}`);
+      this.logger.debug(`Auth object: ${JSON.stringify(client.handshake.auth)}`);
+      
+      if (!token) {
+        this.logger.warn(`No token provided for client ${client.id}`);
+      }
     } catch (e) {
+      this.logger.error(`Connection error: ${e.message}`);
       client.disconnect();
     }
   }
