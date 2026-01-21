@@ -14,11 +14,12 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards, Logger, Injectable } from '@nestjs/common';
+import { UseGuards, Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
 import { SocketAuthGuard } from './guards/socket-auth.guard';
 import { RealtimeService } from './realtime.service';
 import { RealtimeEvents } from './events/event.constants';
 import { UserRole } from '../common/constants/user-roles.constant';
+import { RidesService } from '../rides/rides.service';
 
 @WebSocketGateway({
   cors: {
@@ -37,7 +38,9 @@ export class RealtimeGateway
 
   constructor(
     private readonly realtimeService: RealtimeService,
-    private readonly socketAuthGuard: SocketAuthGuard, // Injected for manual check if needed, but mainly used in @UseGuards
+    private readonly socketAuthGuard: SocketAuthGuard,
+    @Inject(forwardRef(() => RidesService))
+    private readonly ridesService: RidesService,
   ) {}
 
   afterInit(server: Server) {
@@ -71,10 +74,11 @@ export class RealtimeGateway
   /**
    * Secure Event: Join Room
    * Users must join 'ride:ID' to see updates.
+   * Drivers joining 'drivers' room receive available rides.
    */
   @UseGuards(SocketAuthGuard)
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(
+  async handleJoinRoom(
     @ConnectedSocket() client: Socket,
     @MessageBody() room: string,
   ) {
@@ -94,6 +98,15 @@ export class RealtimeGateway
 
     // Auto-join private user room
     client.join(`user:${user.sub}`);
+
+    // If driver joins 'drivers' room, send them available rides
+    if (room === 'drivers' && user.role === UserRole.DRIVER) {
+      const availableRides = await this.ridesService.findAvailableRides();
+      client.emit(RealtimeEvents.RIDES_AVAILABLE, availableRides);
+      this.logger.debug(
+        `Sent ${availableRides.length} available rides to driver ${user.sub}`,
+      );
+    }
   }
 
   /**

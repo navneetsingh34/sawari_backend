@@ -13,6 +13,7 @@ export const RealtimeEvents = {
 
   // Ride Events
   RIDE_NEW: 'ride:new', // To Drivers: New ride available to bid
+  RIDES_AVAILABLE: 'rides:available', // To Driver: Initial list of available rides
   RIDE_STATUS: 'ride:status', // To Rider/Driver: Ride status changed
   RIDE_CANCELLED: 'ride:cancelled',
 

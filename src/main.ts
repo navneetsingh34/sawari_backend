@@ -16,7 +16,7 @@
  * 2. Global Exception Filter:
  *    - Catches all exceptions and returns standardized error responses
  *    - Ensures consistent error format across the API
- *    - Logs errors appropriately
+ *    - Logs errors appropriatelyrw
  *
  * 3. Security Middleware (Helmet):
  *    - Sets security-related HTTP headers

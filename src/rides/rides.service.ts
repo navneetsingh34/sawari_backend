@@ -209,6 +209,20 @@ export class RidesService {
     };
   }
 
+  /**
+   * Find Available Rides (For Drivers)
+   * Returns rides with REQUESTED or BIDDING status
+   */
+  async findAvailableRides(): Promise<RideDocument[]> {
+    return this.rideModel
+      .find({
+        status: { $in: [RideStatus.REQUESTED, RideStatus.BIDDING] },
+      })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .exec();
+  }
+
   private async findById(id: string): Promise<RideDocument> {
     const ride = await this.rideModel.findById(id);
     if (!ride) throw new NotFoundException('Ride not found');
