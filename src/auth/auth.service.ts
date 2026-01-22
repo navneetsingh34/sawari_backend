@@ -38,7 +38,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Register New User
@@ -59,8 +59,17 @@ export class AuthService {
    * - Industry standard practice
    */
   async register(registerDto: RegisterDto) {
+    // Generate unique OTP for riders
+    let riderOtp: string | undefined;
+    if (registerDto.role === 'RIDER') {
+      riderOtp = await this.generateUniqueOtp();
+    }
+
     // Create user (UsersService handles duplicate checking)
-    const user = await this.usersService.create(registerDto);
+    const user = await this.usersService.create({
+      ...registerDto,
+      riderOtp,
+    });
 
     // Generate tokens for immediate login
     const tokens = await this.generateTokens(user);
@@ -74,6 +83,7 @@ export class AuthService {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        ...(user.riderOtp && { riderOtp: user.riderOtp }), // Include OTP for riders
       },
       ...tokens,
     };
@@ -292,5 +302,31 @@ export class AuthService {
   private async updateRefreshToken(userId: string, refreshToken: string) {
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
     await this.usersService.updateRefreshToken(userId, hashedRefreshToken);
+  }
+
+  /**
+   * Generate Unique 4-Digit OTP
+   *
+   * Creates a unique 4-digit OTP for riders.
+   * Ensures uniqueness by checking against existing OTPs.
+   *
+   * Flow:
+   * 1. Generate random 4-digit number
+   * 2. Check if it already exists
+   * 3. If exists, generate new one (recursive)
+   * 4. Return unique OTP
+   */
+  private async generateUniqueOtp(): Promise<string> {
+    const otp = Math.floor(1000 + Math.random() * 9000).toString(); // 1000-9999
+
+    // Check if OTP already exists
+    const existingUser = await this.usersService.findByOtp(otp);
+
+    if (existingUser) {
+      // OTP collision, generate new one
+      return this.generateUniqueOtp();
+    }
+
+    return otp;
   }
 }

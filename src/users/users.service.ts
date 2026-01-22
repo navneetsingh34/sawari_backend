@@ -39,11 +39,12 @@ export interface CreateUserDto {
   password: string;
   role: UserRole;
   name: string;
+  riderOtp?: string; // 4-digit OTP for riders
 }
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) { }
 
   /**
    * Create New User
@@ -251,6 +252,21 @@ export class UsersService {
         { $set: updateData },
         { new: true, runValidators: true },
       )
+      .exec();
+  }
+
+  /**
+   * Find User by OTP
+   *
+   * Used to check if an OTP is already assigned to another rider.
+   * Ensures uniqueness of rider OTPs.
+   */
+  async findByOtp(otp: string): Promise<UserDocument | null> {
+    return this.userModel
+      .findOne({
+        riderOtp: otp,
+        isDeleted: false,
+      })
       .exec();
   }
 

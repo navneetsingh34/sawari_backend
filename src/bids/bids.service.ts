@@ -31,19 +31,50 @@ export class BidsService {
     @InjectModel(Ride.name) private rideModel: Model<RideDocument>,
     private readonly driversService: DriversService,
     private readonly realtimeService: RealtimeService,
-  ) {}
+  ) { }
 
   /**
    * Place a Bid (Driver)
    */
   async placeBid(driverId: string, dto: PlaceBidDto): Promise<BidDocument> {
-    // ... validation steps ...
     const { rideId, amount } = dto;
-    const ride = await this.rideModel.findById(rideId);
-    // ... check logic ...
-    const driverProfile = await this.driversService.getProfile(driverId);
-    // ... validation ...
 
+    // 1. Validate ride exists and is in BIDDING status
+    const ride = await this.rideModel.findById(rideId);
+    if (!ride) {
+      throw new NotFoundException('Ride not found');
+    }
+    if (ride.status !== RideStatus.BIDDING) {
+      throw new BadRequestException('Ride is not open for bidding');
+    }
+
+    // 2. Validate driver profile exists and is verified
+    const driverProfile = await this.driversService.getProfile(driverId);
+    if (!driverProfile.isVerified) {
+      throw new ForbiddenException('Driver profile not verified');
+    }
+
+    // 3. MINIMUM FARE VALIDATION (70% of customFare or suggestedFare)
+    const fareBase = ride.customFare || ride.suggestedFare;
+    const minimumFare = Math.round(fareBase * 0.7);
+
+    if (amount < minimumFare) {
+      throw new BadRequestException(
+        `Bid amount must be at least \u20b9${minimumFare} (70% of \u20b9${fareBase})`
+      );
+    }
+
+    // 4. Check if driver already placed a bid on this ride
+    const existingBid = await this.bidModel.findOne({
+      rideId,
+      driverId,
+      status: BidStatus.ACTIVE,
+    });
+    if (existingBid) {
+      throw new ConflictException('You have already placed a bid on this ride');
+    }
+
+    // 5. Create and save bid
     const bid = new this.bidModel({
       rideId,
       driverId,
@@ -53,7 +84,7 @@ export class BidsService {
 
     const savedBid = await bid.save();
 
-    // REALTIME: Notify Rider
+    // 6. REALTIME: Notify Rider of new bid
     this.realtimeService.notifyNewBid(rideId, savedBid);
 
     return savedBid;
@@ -84,6 +115,20 @@ export class BidsService {
     const winningBid = await this.bidModel.findById(bidId);
     // ... checks ...
 
+    // Check if winning driver already has an active ride
+    const driverActiveRide = await this.rideModel.findOne({
+      driverId: winningBid.driverId,
+      status: {
+        $in: ['ACCEPTED', 'ARRIVED', 'STARTED'],
+      },
+    });
+
+    if (driverActiveRide) {
+      throw new BadRequestException(
+        'This driver is already on another ride. Please select a different driver.',
+      );
+    }
+
     // 1. Update Winning Bid
     winningBid.status = BidStatus.ACCEPTED;
     await winningBid.save();
@@ -108,5 +153,18 @@ export class BidsService {
     this.realtimeService.notifyBidResult(winningBid.driverId, true, rideId);
 
     // 3. Notify Losing Drivers? (Ideally yes, but skipped for brevity in mvp)
+  }
+
+  /**
+   * Get Driver's Bid for a Ride
+   * Returns the specific driver's bid for a ride (for bid visibility)
+   */
+  async getDriverBidForRide(
+    driverId: string,
+    rideId: string,
+  ): Promise<BidDocument | null> {
+    return this.bidModel
+      .findOne({ rideId, driverId, status: BidStatus.ACTIVE })
+      .exec();
   }
 }

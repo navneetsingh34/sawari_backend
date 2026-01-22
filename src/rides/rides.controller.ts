@@ -28,6 +28,9 @@ import { CreateRideDto } from './dto/create-ride.dto';
 import { EstimateRideDto } from './dto/estimate-ride.dto';
 import { CancelRideDto } from './dto/cancel-ride.dto';
 import { RideHistoryQueryDto } from './dto/ride-history-query.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { CollectPaymentDto } from './dto/collect-payment.dto';
+import { SubmitReviewDto } from './dto/submit-review.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -116,18 +119,36 @@ export class RidesController {
   async arrived(
     @Param('id') rideId: string,
     @CurrentUser('id') driverId: string,
+    @Body() body?: { location?: { lat: number; lng: number } },
   ) {
-    return this.ridesService.driverArrived(rideId, driverId);
+    return this.ridesService.driverArrived(rideId, driverId, body?.location);
   }
 
-  @Patch(':id/start')
+  @Patch(':id/verify-otp')
   @Roles(UserRole.DRIVER)
-  @ApiOperation({ summary: 'Start the ride' })
-  async start(
+  @ApiOperation({ summary: 'Verify OTP and start the ride' })
+  async verifyOtpAndStart(
     @Param('id') rideId: string,
     @CurrentUser('id') driverId: string,
+    @Body() verifyOtpDto: VerifyOtpDto,
   ) {
-    return this.ridesService.startRide(rideId, driverId);
+    return this.ridesService.verifyOtpAndStart(rideId, driverId, verifyOtpDto.otp);
+  }
+
+  @Patch(':id/collect-payment')
+  @Roles(UserRole.DRIVER)
+  @ApiOperation({ summary: 'Collect payment from rider' })
+  async collectPayment(
+    @Param('id') rideId: string,
+    @CurrentUser('id') driverId: string,
+    @Body() paymentDto: CollectPaymentDto,
+  ) {
+    return this.ridesService.collectPayment(
+      rideId,
+      driverId,
+      paymentDto.paymentMethod,
+      paymentDto.amount,
+    );
   }
 
   @Patch(':id/complete')
@@ -172,5 +193,21 @@ export class RidesController {
     @Param('id') rideId: string,
   ) {
     return this.ridesService.getRideDetails(rideId);
+  }
+
+  @Post(':id/review')
+  @Roles(UserRole.RIDER)
+  @ApiOperation({ summary: 'Submit driver review after ride completion' })
+  async submitReview(
+    @Param('id') rideId: string,
+    @CurrentUser('id') riderId: string,
+    @Body() reviewDto: SubmitReviewDto,
+  ) {
+    return this.ridesService.submitReview(
+      rideId,
+      riderId,
+      reviewDto.rating,
+      reviewDto.review,
+    );
   }
 }

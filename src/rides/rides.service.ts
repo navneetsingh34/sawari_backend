@@ -78,6 +78,14 @@ export class RidesService {
     riderId: string,
     createDto: CreateRideDto,
   ): Promise<RideDocument> {
+    // Check if rider already has an active ride
+    const existingActiveRide = await this.findActiveRide(riderId, UserRole.RIDER);
+    if (existingActiveRide) {
+      throw new BadRequestException(
+        'You already have an active ride. Please complete or cancel it before creating a new one.',
+      );
+    }
+
     // ... existing logic ...
     const { pickup, drop } = createDto;
     const route = await this.locationService.calculateRoute(
@@ -104,6 +112,7 @@ export class RidesService {
       distanceMeters: route.distanceMeters,
       durationSeconds: route.durationSeconds,
       suggestedFare: estimatedFare,
+      customFare: createDto.customFare, // Store rider's offered amount
     });
 
     const savedRide = await ride.save();
@@ -136,6 +145,14 @@ export class RidesService {
    * Transitions: REQUESTED | BIDDING -> ACCEPTED
    */
   async acceptRide(rideId: string, driverId: string): Promise<RideDocument> {
+    // Check if driver already has an active ride
+    const existingActiveRide = await this.findActiveRide(driverId, UserRole.DRIVER);
+    if (existingActiveRide) {
+      throw new BadRequestException(
+        'You already have an active ride. Please complete or cancel it before accepting a new one.',
+      );
+    }
+
     const ride = await this.findById(rideId);
     this.validateTransition(ride.status, RideStatus.ACCEPTED);
 
@@ -155,7 +172,11 @@ export class RidesService {
    * Driver Arrived (Driver)
    * Transitions: ACCEPTED -> ARRIVED
    */
-  async driverArrived(rideId: string, driverId: string): Promise<RideDocument> {
+  async driverArrived(
+    rideId: string,
+    driverId: string,
+    location?: { lat: number; lng: number },
+  ): Promise<RideDocument> {
     const ride = await this.findById(rideId);
     this.verifyDriver(ride, driverId);
     this.validateTransition(ride.status, RideStatus.ARRIVED);
@@ -163,8 +184,11 @@ export class RidesService {
     ride.status = RideStatus.ARRIVED;
     const saved = await ride.save();
 
-    // REALTIME: Notify Rider
+    // REALTIME: Notify Rider with driver location
     this.realtimeService.updateRideStatus(rideId, RideStatus.ARRIVED);
+    if (location) {
+      this.realtimeService.notifyDriverArrived(rideId, location);
+    }
     return saved;
   }
 
@@ -206,7 +230,57 @@ export class RidesService {
     return saved;
   }
 
-  async startRide(rideId: string, driverId: string): Promise<RideDocument> {
+  /**
+   * Verify OTP and Start Ride (Driver)
+   * Transitions: ARRIVED -> STARTED
+   * Requires correct rider OTP
+   */
+  async verifyOtpAndStart(
+    rideId: string,
+    driverId: string,
+    otp: string,
+  ): Promise<RideDocument> {
+    const ride = await this.rideModel
+      .findById(rideId)
+      .populate('riderId', 'riderOtp')
+      .exec();
+
+    if (!ride) throw new NotFoundException('Ride not found');
+    this.verifyDriver(ride, driverId);
+    this.validateTransition(ride.status, RideStatus.STARTED);
+
+    // Verify OTP
+    const rider = ride.riderId as any;
+    if (!rider.riderOtp) {
+      throw new BadRequestException('Rider OTP not found');
+    }
+
+    if (rider.riderOtp !== otp) {
+      // Notify failure
+      this.realtimeService.notifyOtpResult(
+        rideId,
+        false,
+        'Incorrect OTP. Please try again.',
+      );
+      throw new BadRequestException('Incorrect OTP');
+    }
+
+    // OTP verified, start ride
+    ride.status = RideStatus.STARTED;
+    const saved = await ride.save();
+
+    // REALTIME: Notify success
+    this.realtimeService.notifyOtpResult(rideId, true, 'Ride started successfully');
+    this.realtimeService.updateRideStatus(rideId, RideStatus.STARTED);
+
+    return saved;
+  }
+
+  /**
+   * Start Ride (Legacy - for backward compatibility)
+   * Use verifyOtpAndStart instead
+   */
+  private async startRide(rideId: string, driverId: string): Promise<RideDocument> {
     const ride = await this.findById(rideId);
     this.verifyDriver(ride, driverId);
     this.validateTransition(ride.status, RideStatus.STARTED);
@@ -220,20 +294,35 @@ export class RidesService {
   }
 
   async completeRide(rideId: string, driverId: string): Promise<RideDocument> {
-    const ride = await this.findById(rideId);
+    const ride = await this.rideModel
+      .findById(rideId)
+      .populate('riderId', '_id')
+      .exec();
+
+    if (!ride) throw new NotFoundException('Ride not found');
     this.verifyDriver(ride, driverId);
     this.validateTransition(ride.status, RideStatus.COMPLETED);
 
+    // Check if payment was collected
+    if (!ride.paymentCollected) {
+      throw new BadRequestException('Payment must be collected before completing ride');
+    }
+
     ride.status = RideStatus.COMPLETED;
-    ride.finalFare = ride.suggestedFare;
+    if (!ride.finalFare) {
+      ride.finalFare = ride.suggestedFare;
+    }
     const saved = await ride.save();
 
     // REALTIME
     this.realtimeService.updateRideStatus(rideId, RideStatus.COMPLETED);
 
     // FINANCIALS: Calculate Commission & Driver Earnings
-    // This triggers the WalletService logic asynchronously
     await this.commissionsService.calculateAndLog(saved);
+
+    // Request review from rider
+    const riderId = (ride.riderId as any)._id.toString();
+    this.realtimeService.requestReview(riderId, rideId, driverId);
 
     return saved;
   }
@@ -395,5 +484,108 @@ export class RidesService {
     }
 
     throw new ForbiddenException('Not a participant in this ride');
+  }
+
+  /**
+   * Collect Payment (Driver)
+   * Marks payment as collected and stores payment method
+   */
+  async collectPayment(
+    rideId: string,
+    driverId: string,
+    paymentMethod: string,
+    amount: number,
+  ): Promise<RideDocument> {
+    const ride = await this.findById(rideId);
+    this.verifyDriver(ride, driverId);
+
+    if (ride.status !== RideStatus.STARTED) {
+      throw new BadRequestException('Can only collect payment during active ride');
+    }
+
+    ride.paymentMethod = paymentMethod;
+    ride.paymentCollected = true;
+    ride.finalFare = amount;
+
+    const saved = await ride.save();
+
+    // REALTIME: Notify both parties
+    this.realtimeService.notifyPaymentCollected(rideId, paymentMethod);
+
+    return saved;
+  }
+
+  /**
+   * Submit Review (Rider)
+   * Allows rider to rate driver after ride completion
+   */
+  async submitReview(
+    rideId: string,
+    riderId: string,
+    rating: number,
+    review?: string,
+  ): Promise<RideDocument> {
+    const ride = await this.rideModel
+      .findById(rideId)
+      .populate('driverId', '_id')
+      .exec();
+
+    if (!ride) throw new NotFoundException('Ride not found');
+
+    if (ride.riderId.toString() !== riderId) {
+      throw new ForbiddenException('Not your ride');
+    }
+
+    if (ride.status !== RideStatus.COMPLETED) {
+      throw new BadRequestException('Can only review completed rides');
+    }
+
+    if (ride.driverRating) {
+      throw new BadRequestException('Review already submitted');
+    }
+
+    ride.driverRating = rating;
+    ride.riderReview = review;
+    ride.reviewedAt = new Date();
+
+    const saved = await ride.save();
+
+    // Update driver's average rating
+    await this.updateDriverRating((ride.driverId as any)._id.toString());
+
+    // REALTIME: Notify driver
+    this.realtimeService.notifyReviewSubmitted(
+      (ride.driverId as any)._id.toString(),
+      rideId,
+      rating,
+    );
+
+    return saved;
+  }
+
+  /**
+   * Update Driver's Average Rating
+   * Calculates average rating from all completed rides
+   */
+  private async updateDriverRating(driverId: string): Promise<void> {
+    const rides = await this.rideModel
+      .find({
+        driverId,
+        status: RideStatus.COMPLETED,
+        driverRating: { $exists: true, $ne: null },
+      })
+      .select('driverRating')
+      .exec();
+
+    if (rides.length === 0) return;
+
+    const totalRating = rides.reduce((sum, ride) => sum + (ride.driverRating || 0), 0);
+    const averageRating = totalRating / rides.length;
+
+    // Update driver profile (assuming DriversService has this method)
+    // This would need to be implemented in DriversService
+    this.logger.log(
+      `Driver ${driverId} average rating: ${averageRating.toFixed(2)} from ${rides.length} reviews`,
+    );
   }
 }

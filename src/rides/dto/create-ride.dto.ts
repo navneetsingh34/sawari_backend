@@ -52,4 +52,14 @@ export class CreateRideDto {
   @Type(() => LocationDto)
   @IsNotEmpty()
   drop: LocationDto;
+
+  @ApiProperty({
+    description: 'Custom fare offered by rider (optional, overrides system estimate)',
+    example: 300,
+    required: false
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  customFare?: number;
 }

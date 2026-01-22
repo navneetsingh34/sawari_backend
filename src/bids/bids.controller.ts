@@ -49,12 +49,26 @@ export class BidsController {
   }
 
   @Get('ride/:rideId')
-  @ApiOperation({ summary: 'Get active bids for a ride' })
+  @Roles(UserRole.RIDER)
+  @ApiOperation({ summary: 'Get all active bids for a ride (Rider only)' })
   async getBids(@Param('rideId') rideId: string) {
     if (!isValidObjectId(rideId)) {
       throw new BadRequestException('Invalid Ride ID');
     }
     return this.bidsService.getBidsForRide(rideId);
+  }
+
+  @Get('my-bid/:rideId')
+  @Roles(UserRole.DRIVER)
+  @ApiOperation({ summary: 'Get my bid for a specific ride (Driver only)' })
+  async getMyBid(
+    @Param('rideId') rideId: string,
+    @CurrentUser('id') driverId: string,
+  ) {
+    if (!isValidObjectId(rideId)) {
+      throw new BadRequestException('Invalid Ride ID');
+    }
+    return this.bidsService.getDriverBidForRide(driverId, rideId);
   }
 
   @Patch(':bidId/accept')

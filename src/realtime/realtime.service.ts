@@ -79,4 +79,97 @@ export class RealtimeService {
       ...location,
     });
   }
+
+  /**
+   * Notify Rider that Driver Arrived at Pickup
+   */
+  notifyDriverArrived(rideId: string, driverLocation: { lat: number; lng: number }) {
+    if (!this.server) return;
+    this.logger.debug(`Driver arrived at pickup for ride ${rideId}`);
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.DRIVER_ARRIVED_AT_PICKUP, {
+      rideId,
+      driverLocation,
+    });
+  }
+
+  /**
+   * Request OTP from Driver
+   */
+  requestOtpVerification(rideId: string) {
+    if (!this.server) return;
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.RIDE_START_OTP_REQUIRED, {
+      rideId,
+    });
+  }
+
+  /**
+   * Notify OTP Verification Result
+   */
+  notifyOtpResult(rideId: string, success: boolean, message?: string) {
+    if (!this.server) return;
+    const event = success
+      ? RealtimeEvents.RIDE_START_OTP_VERIFIED
+      : RealtimeEvents.RIDE_START_OTP_FAILED;
+
+    this.server.to(`ride:${rideId}`).emit(event, {
+      rideId,
+      success,
+      message,
+    });
+  }
+
+  /**
+   * Emit Live Route Updates
+   */
+  emitLiveRoute(rideId: string, routeData: any) {
+    if (!this.server) return;
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.LIVE_ROUTE_UPDATE, {
+      rideId,
+      ...routeData,
+    });
+  }
+
+  /**
+   * Request Payment Collection from Driver
+   */
+  requestPayment(rideId: string, fareAmount: number) {
+    if (!this.server) return;
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.PAYMENT_SCREEN, {
+      rideId,
+      fareAmount,
+    });
+  }
+
+  /**
+   * Notify Payment Collected
+   */
+  notifyPaymentCollected(rideId: string, paymentMethod: string) {
+    if (!this.server) return;
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.PAYMENT_COLLECTED, {
+      rideId,
+      paymentMethod,
+    });
+  }
+
+  /**
+   * Request Review from Rider
+   */
+  requestReview(riderId: string, rideId: string, driverId: string) {
+    if (!this.server) return;
+    this.server.to(`user:${riderId}`).emit(RealtimeEvents.REVIEW_REQUEST, {
+      rideId,
+      driverId,
+    });
+  }
+
+  /**
+   * Notify Driver of Review Submission
+   */
+  notifyReviewSubmitted(driverId: string, rideId: string, rating: number) {
+    if (!this.server) return;
+    this.server.to(`user:${driverId}`).emit(RealtimeEvents.REVIEW_SUBMITTED, {
+      rideId,
+      rating,
+    });
+  }
 }

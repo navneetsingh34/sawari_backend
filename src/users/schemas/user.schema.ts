@@ -91,6 +91,14 @@ export class User {
   isActive: boolean;
 
   @Prop({
+    required: false,
+    unique: true,
+    sparse: true, // Only enforce uniqueness for non-null values
+    length: 4,
+  })
+  riderOtp?: string; // 4-digit OTP for riders only
+
+  @Prop({
     default: false,
     index: true,
   })

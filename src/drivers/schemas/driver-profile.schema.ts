@@ -75,9 +75,13 @@ export class DriverProfile {
 
   @Prop({ default: 0 })
   totalRides: number;
+
+  @Prop({ default: 0 })
+  totalReviews: number;
 }
 
 export const DriverProfileSchema = SchemaFactory.createForClass(DriverProfile);
 
 // Ensure 2dsphere index is created for geospatial queries
-// DriverProfileSchema.index({ currentLocation: '2dsphere' }); // Handled by @Prop decorator
+// This is required for $geoNear aggregation to work
+DriverProfileSchema.index({ currentLocation: '2dsphere' });

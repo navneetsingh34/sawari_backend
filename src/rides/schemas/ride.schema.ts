@@ -69,6 +69,9 @@ export class Ride {
   suggestedFare: number;
 
   @Prop({ required: false })
+  customFare?: number; // Rider's offered amount
+
+  @Prop({ required: false })
   finalFare?: number;
 
   // Route Info
@@ -84,6 +87,27 @@ export class Ride {
 
   @Prop({ required: false })
   cancelledBy?: string; // User ID
+
+  // Payment
+  @Prop({
+    required: false,
+    enum: ['CASH', 'UPI', 'PENDING'],
+    default: 'PENDING',
+  })
+  paymentMethod?: string;
+
+  @Prop({ required: false, default: false })
+  paymentCollected?: boolean;
+
+  // Review
+  @Prop({ required: false, min: 1, max: 5 })
+  driverRating?: number;
+
+  @Prop({ required: false })
+  riderReview?: string;
+
+  @Prop({ required: false })
+  reviewedAt?: Date;
 }
 
 export const RideSchema = SchemaFactory.createForClass(Ride);
