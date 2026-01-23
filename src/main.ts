@@ -221,7 +221,9 @@ async function bootstrap() {
   const port = configService.get<number>('app.port') || 3000;
   const env = configService.get<string>('app.env') || 'development';
 
-  await app.listen(port);
+  // Listen on 0.0.0.0 to accept connections from outside the container
+  // This is required for cloud platforms like Railway, Heroku, etc.
+  await app.listen(port, '0.0.0.0');
 
   // Log startup information
   logger.log(
