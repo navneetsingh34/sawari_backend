@@ -83,6 +83,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
       email: user.email,
       phone: user.phone,
       role: user.role,
+      riderOtp: user.riderOtp, // Include OTP for riders
     };
   }
 }

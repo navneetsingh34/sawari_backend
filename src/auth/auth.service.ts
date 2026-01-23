@@ -144,6 +144,7 @@ export class AuthService {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        ...(user.riderOtp && { riderOtp: user.riderOtp }), // Include OTP for riders
       },
       ...tokens,
     };

@@ -23,7 +23,7 @@ import rateLimit from 'express-rate-limit';
 export class RateLimitMiddleware implements NestMiddleware {
   private limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: 1000, // Increased from 100 to 1000 for development
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: {

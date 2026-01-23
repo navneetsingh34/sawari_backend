@@ -246,6 +246,12 @@ export class RidesService {
       .exec();
 
     if (!ride) throw new NotFoundException('Ride not found');
+
+    // Idempotency: If already started, return without error
+    if (ride.status === RideStatus.STARTED) {
+      return ride;
+    }
+
     this.verifyDriver(ride, driverId);
     this.validateTransition(ride.status, RideStatus.STARTED);
 
