@@ -296,7 +296,7 @@ TransactionSchema.index({ walletId: 1, createdAt: -1 });
 TransactionSchema.index({ userId: 1, reason: 1, createdAt: -1 });
 
 // Idempotency and reconciliation
-TransactionSchema.index({ referenceId: 1 });
+// TransactionSchema.index({ referenceId: 1 }); // Handled by @Prop({ index: true })
 
 // System-wide financial analytics
 TransactionSchema.index({ type: 1, createdAt: -1 });
