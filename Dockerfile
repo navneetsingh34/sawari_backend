@@ -44,4 +44,4 @@ USER nestjs
 EXPOSE 3000
 
 # Start command
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
