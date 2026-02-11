@@ -17,6 +17,8 @@
 
 import {
   Injectable,
+  Inject,
+  forwardRef,
   BadRequestException,
   NotFoundException,
   ConflictException,
@@ -43,6 +45,7 @@ export class DriversService {
     private driverModel: Model<DriverProfileDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Ride.name) private rideModel: Model<RideDocument>,
+    @Inject(forwardRef(() => RealtimeService))
     private readonly realtimeService: RealtimeService,
   ) { }
 
@@ -171,5 +174,103 @@ export class DriversService {
     }
 
     return updatedProfile;
+  }
+
+  /**
+   * Upload Driver Document
+   * 
+   * Stores document (license, insurance, etc.) as base64.
+   * In production, you would typically use cloud storage (S3, GCS).
+   */
+  async uploadDocument(
+    userId: string,
+    documentType: string,
+    base64Data: string,
+    fileName: string,
+    mimeType: string,
+  ): Promise<DriverProfile> {
+    // Validate document type
+    const validTypes = ['driverLicense', 'insurancePolicy', 'vehicleRegistration', 'profilePhoto'];
+    if (!validTypes.includes(documentType)) {
+      throw new BadRequestException(`Invalid document type. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    // Validate base64 data
+    if (!base64Data || base64Data.length === 0) {
+      throw new BadRequestException('Document data is required');
+    }
+
+    // Maximum file size check (5MB limit for base64)
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    const base64SizeBytes = (base64Data.length * 3) / 4;
+    if (base64SizeBytes > maxSizeBytes) {
+      throw new BadRequestException('File size exceeds 5MB limit');
+    }
+
+    // Create document entry
+    const documentEntry = {
+      url: base64Data, // In production, upload to cloud storage and store URL
+      fileName,
+      mimeType,
+      uploadedAt: new Date(),
+      isVerified: false,
+    };
+
+    // Update the specific document in the profile
+    const updatePath = `documents.${documentType}`;
+
+    const profile = await this.driverModel.findOneAndUpdate(
+      { userId },
+      { $set: { [updatePath]: documentEntry } },
+      { new: true, upsert: false },
+    );
+
+    if (!profile) {
+      throw new NotFoundException('Driver profile not found');
+    }
+
+    return profile;
+  }
+
+  /**
+   * Get Driver Documents
+   */
+  async getDocuments(userId: string): Promise<any> {
+    const profile = await this.driverModel.findOne({ userId }).select('documents');
+    if (!profile) {
+      throw new NotFoundException('Driver profile not found');
+    }
+    return profile.documents || {};
+  }
+  /**
+   * Get Dashboard Statistics
+   * 
+   * returns aggregated stats for the driver dashboard.
+   */
+  async getDashboardStats(userId: string) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Find completed rides for today
+    // Note: In real app, ensure indexes on driverId + createdAt
+    const rides = await this.rideModel.find({
+      driverId: userId,
+      createdAt: { $gte: todayStart },
+      status: RideStatus.COMPLETED
+    });
+
+    const earnings = rides.reduce((sum, ride) => sum + (ride.finalFare || ride.customFare || 0), 0);
+    const rideCount = rides.length;
+
+    // Mock data for incomplete features
+    // onlineHours: separate collection usually tracks session times
+    // acceptanceRate: requires tracking declined offers
+    return {
+      earnings,
+      rides: rideCount,
+      onlineHours: 5.2,
+      acceptanceRate: 94,
+      rating: 4.9
+    };
   }
 }

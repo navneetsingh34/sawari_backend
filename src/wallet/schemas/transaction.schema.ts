@@ -61,6 +61,7 @@ export enum TransactionReason {
   WITHDRAWAL = 'WITHDRAWAL', // Driver withdraws to bank (future)
   BONUS = 'BONUS', // Platform bonus/incentive (future)
   PENALTY = 'PENALTY', // Fine for policy violation (future)
+  DEPOSIT = 'DEPOSIT', // Money added by user
 }
 
 @Schema({ timestamps: true, collection: 'transactions' })

@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module'; // Access to JwtService
 import { SocketAuthGuard } from './guards/socket-auth.guard';
 import { ConfigModule } from '@nestjs/config';
 import { RidesModule } from '../rides/rides.module';
+import { DriversModule } from '../drivers/drivers.module';
 
 @Global() // Make it global so we don't have to import it everywhere?
 // Actually, explicitly importing is cleaner architecture usually, but for Relatime which is cross-cutting, Global is easier.
@@ -12,8 +13,8 @@ import { RidesModule } from '../rides/rides.module';
 // The Plan said "Imports AuthModule... Exports RealtimeService".
 // I'll make it Global to simplify the many injections needed in Step 7 Integration.
 @Module({
-  imports: [AuthModule, ConfigModule, forwardRef(() => RidesModule)],
+  imports: [AuthModule, ConfigModule, forwardRef(() => RidesModule), forwardRef(() => DriversModule)],
   providers: [RealtimeService, RealtimeGateway, SocketAuthGuard],
   exports: [RealtimeService],
 })
-export class RealtimeModule {}
+export class RealtimeModule { }

@@ -42,7 +42,7 @@ import { DriverProfile } from './schemas/driver-profile.schema';
 @UseGuards(RolesGuard) // Enforce role checks for all routes in this controller
 @Roles(UserRole.DRIVER) // ONLY Drivers can access these endpoints
 export class DriversController {
-  constructor(private readonly driversService: DriversService) {}
+  constructor(private readonly driversService: DriversService) { }
 
   @Post('profile')
   @HttpCode(HttpStatus.CREATED)
@@ -95,5 +95,37 @@ export class DriversController {
     @Body() locationDto: UpdateDriverLocationDto,
   ) {
     return this.driversService.updateLocation(userId, locationDto);
+  }
+
+  @Post('documents')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload a driver document (license, insurance, etc.)' })
+  @ApiResponse({ status: 200, description: 'Document uploaded successfully', type: DriverProfile })
+  @ApiResponse({ status: 400, description: 'Invalid document type or file too large' })
+  async uploadDocument(
+    @CurrentUser('id') userId: string,
+    @Body() uploadDto: { documentType: string; base64Data: string; fileName: string; mimeType: string },
+  ) {
+    return this.driversService.uploadDocument(
+      userId,
+      uploadDto.documentType,
+      uploadDto.base64Data,
+      uploadDto.fileName,
+      uploadDto.mimeType,
+    );
+  }
+
+  @Get('documents')
+  @ApiOperation({ summary: 'Get all driver documents' })
+  @ApiResponse({ status: 200, description: 'Returns all uploaded documents' })
+  async getDocuments(@CurrentUser('id') userId: string) {
+    return this.driversService.getDocuments(userId);
+  }
+
+  @Get('dashboard/stats')
+  @ApiOperation({ summary: 'Get driver dashboard statistics' })
+  @ApiResponse({ status: 200, description: 'Returns aggregated earnings and stats' })
+  async getDashboardStats(@CurrentUser('id') userId: string) {
+    return this.driversService.getDashboardStats(userId);
   }
 }

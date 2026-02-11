@@ -113,9 +113,18 @@ export class RidesService {
       durationSeconds: route.durationSeconds,
       suggestedFare: estimatedFare,
       customFare: createDto.customFare, // Store rider's offered amount
+      vehicleType: createDto.vehicleType || 'CAR',
+      rideOptions: {
+        hasAc: createDto.rideOptions?.hasAc || false,
+        isShared: createDto.rideOptions?.isShared || false
+      }
     });
 
     const savedRide = await ride.save();
+
+    // REALTIME: Alert Drivers immediately
+    this.realtimeService.alertDrivers(savedRide);
+
     return savedRide;
   }
 
@@ -227,6 +236,7 @@ export class RidesService {
 
     // REALTIME
     this.realtimeService.updateRideStatus(rideId, RideStatus.CANCELLED);
+    this.realtimeService.notifyRideCancelled(rideId, userId, reason);
     return saved;
   }
 
@@ -362,12 +372,23 @@ export class RidesService {
   /**
    * Find Available Rides (For Drivers)
    * Returns rides with REQUESTED or BIDDING status
+   * Filtered by Vehicle Type and Capabilities
    */
-  async findAvailableRides(): Promise<RideDocument[]> {
+  async findAvailableRides(filters?: { vehicleType?: string; hasAc?: boolean }): Promise<RideDocument[]> {
+    const query: any = {
+      status: { $in: [RideStatus.REQUESTED, RideStatus.BIDDING] },
+    };
+
+    if (filters?.vehicleType) {
+      query.vehicleType = filters.vehicleType.toUpperCase();
+    }
+
+    // REMOVED: AC Filtering
+    // User Requirement: All Car drivers should see both AC and Non-AC requests.
+    // It is up to the driver/rider negotiation or price acceptance.
+
     return this.rideModel
-      .find({
-        status: { $in: [RideStatus.REQUESTED, RideStatus.BIDDING] },
-      })
+      .find(query)
       .sort({ createdAt: -1 })
       .limit(50)
       .exec();
@@ -431,13 +452,13 @@ export class RidesService {
       throw new BadRequestException(`Ride is already ${current}`);
     }
 
+    // Allow cancellation at any point before completion (like InDrive/Uber/Ola)
     if (next === RideStatus.CANCELLED) {
+      // Log cancellation of started rides for analytics/penalties
       if (current === RideStatus.STARTED) {
-        throw new BadRequestException(
-          'Cannot cancel a ride that has started. Please end trip.',
-        );
+        this.logger.warn(`Ride cancelled after starting - may incur cancellation fee`);
       }
-      return; // Validation passed for cancellation (before start)
+      return; // Validation passed for cancellation
     }
 
     const validTransitions: Record<string, RideStatus[]> = {
@@ -449,7 +470,7 @@ export class RidesService {
       [RideStatus.BIDDING]: [RideStatus.ACCEPTED, RideStatus.CANCELLED],
       [RideStatus.ACCEPTED]: [RideStatus.ARRIVED, RideStatus.STARTED, RideStatus.CANCELLED], // Added ARRIVED. Keeping STARTED for backward compat/legacy flows if needed, but ideally ACCEPTED->ARRIVED->STARTED
       [RideStatus.ARRIVED]: [RideStatus.STARTED, RideStatus.CANCELLED],
-      [RideStatus.STARTED]: [RideStatus.COMPLETED],
+      [RideStatus.STARTED]: [RideStatus.COMPLETED, RideStatus.CANCELLED], // Allow cancellation of started rides
     };
 
     if (!validTransitions[current]?.includes(next)) {

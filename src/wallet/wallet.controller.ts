@@ -1,11 +1,10 @@
 /**
  * WALLET CONTROLLER
  *
- * Provides read-only access to financial data for drivers and admins.
- * Write operations (credit/debit) are internal-only via WalletService.
+ * Provides access to financial data and operations for drivers and riders.
  */
 
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -22,21 +21,23 @@ import {
   GetTransactionHistoryDto,
   TransactionHistoryResponseDto,
   WalletBalanceResponseDto,
+  TopUpWalletDto,
 } from './dto/wallet.dto';
+import { TransactionReason } from './schemas/transaction.schema';
 
 @ApiTags('Wallet')
 @ApiBearerAuth('JWT')
 @Controller('wallet')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(private readonly walletService: WalletService) { }
 
   @Get('balance')
-  @Roles(UserRole.DRIVER)
+  @Roles(UserRole.DRIVER, UserRole.RIDER)
   @ApiOperation({
     summary: 'Get current wallet balance',
     description:
-      "Returns the cached balance from the driver's wallet. Source of truth is the transaction ledger.",
+      "Returns the cached balance from the user's wallet. Source of truth is the transaction ledger.",
   })
   @ApiOkResponse({ type: WalletBalanceResponseDto })
   async getBalance(@CurrentUser('id') userId: string) {
@@ -44,7 +45,7 @@ export class WalletController {
   }
 
   @Get('transactions')
-  @Roles(UserRole.DRIVER)
+  @Roles(UserRole.DRIVER, UserRole.RIDER)
   @ApiOperation({
     summary: 'Get transaction history',
     description:
@@ -61,6 +62,22 @@ export class WalletController {
       query.limit,
       query.type,
       query.reason,
+    );
+  }
+
+  @Post('top-up')
+  @Roles(UserRole.DRIVER, UserRole.RIDER)
+  @ApiOperation({
+    summary: 'Add money to wallet',
+    description: 'Adds funds to the user wallet (Simulated payment)',
+  })
+  async topUp(@CurrentUser('id') userId: string, @Body() dto: TopUpWalletDto) {
+    return this.walletService.creditWallet(
+      userId,
+      dto.amount,
+      TransactionReason.DEPOSIT,
+      `TOPUP_${Date.now()}`,
+      { source: 'manual_topup' },
     );
   }
 }

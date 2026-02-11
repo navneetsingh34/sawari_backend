@@ -30,6 +30,51 @@ export class VehicleInfo {
 
   @Prop({ required: true })
   vehicleColor: string;
+
+  @Prop({
+    type: {
+      hasAc: { type: Boolean, default: false },
+      allowsSharing: { type: Boolean, default: false }
+    },
+    default: { hasAc: true, allowsSharing: false } // Default CAR has AC
+  })
+  features: {
+    hasAc: boolean;
+    allowsSharing: boolean;
+  };
+}
+
+@Schema({ _id: false })
+export class DriverDocument {
+  @Prop({ required: false })
+  url: string; // File URL or base64 encoded data
+
+  @Prop({ required: false })
+  fileName: string;
+
+  @Prop({ required: false })
+  mimeType: string;
+
+  @Prop({ default: Date.now })
+  uploadedAt: Date;
+
+  @Prop({ default: false })
+  isVerified: boolean;
+}
+
+@Schema({ _id: false })
+export class DriverDocuments {
+  @Prop({ type: DriverDocument })
+  driverLicense: DriverDocument;
+
+  @Prop({ type: DriverDocument })
+  insurancePolicy: DriverDocument;
+
+  @Prop({ type: DriverDocument })
+  vehicleRegistration: DriverDocument;
+
+  @Prop({ type: DriverDocument })
+  profilePhoto: DriverDocument;
 }
 
 @Schema({ _id: false })
@@ -55,6 +100,10 @@ export class DriverProfile {
   // Nested vehicle information
   @Prop({ type: VehicleInfo, required: true })
   vehicleInfo: VehicleInfo;
+
+  // Driver documents (license, insurance, etc.)
+  @Prop({ type: DriverDocuments })
+  documents: DriverDocuments;
 
   // Driver verification status (admin verification)
   @Prop({ default: false })
@@ -84,4 +133,4 @@ export const DriverProfileSchema = SchemaFactory.createForClass(DriverProfile);
 
 // Ensure 2dsphere index is created for geospatial queries
 // This is required for $geoNear aggregation to work
-DriverProfileSchema.index({ currentLocation: '2dsphere' });
+

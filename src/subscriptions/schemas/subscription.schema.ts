@@ -17,7 +17,7 @@ export type SubscriptionDocument = Subscription & Document;
 export const PLANS = {
   DRIVER_7_DAYS: {
     id: 'DRIVER_7_DAYS',
-    price: 300,
+    price: 99,
     days: 7,
     name: '7 Day Power Pass',
   },

@@ -149,3 +149,17 @@ export class CreateTransactionDto {
   @IsOptional()
   metadata?: Record<string, any>;
 }
+
+/**
+ * DTO for adding money to wallet (Top Up)
+ */
+export class TopUpWalletDto {
+  @ApiProperty({
+    description: 'Amount to add to wallet',
+    example: 500,
+    minimum: 1,
+  })
+  @IsNumber()
+  @Min(1)
+  amount: number;
+}

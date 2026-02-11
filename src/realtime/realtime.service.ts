@@ -25,13 +25,21 @@ export class RealtimeService {
 
   /**
    * Alert all online drivers about a new ride
-   * (In production, this would be Geo-fenced to drivers in radius)
+   * Broadcasts to the base vehicle type room so ALL drivers of that type see the ride
+   * AC/Shared preferences are rider requests, not driver filters
    */
   alertDrivers(ride: any) {
     if (!this.server) return;
-    this.logger.debug(`Broadcasting new ride ${ride._id} to 'drivers' room`);
 
-    // In future: this.server.to(`geo:${city}`).emit(...)
+    const vType = ride.vehicleType ? ride.vehicleType.toUpperCase() : 'CAR';
+
+    // Always broadcast to the base vehicle room so all drivers see it
+    const baseRoom = `drivers:${vType}`;
+
+    this.logger.debug(`Broadcasting new ride ${ride._id} to '${baseRoom}' room`);
+    this.server.to(baseRoom).emit(RealtimeEvents.RIDE_NEW, ride);
+
+    // Also broadcast to the generic 'drivers' room for maximum visibility
     this.server.to('drivers').emit(RealtimeEvents.RIDE_NEW, ride);
   }
 
@@ -170,6 +178,20 @@ export class RealtimeService {
     this.server.to(`user:${driverId}`).emit(RealtimeEvents.REVIEW_SUBMITTED, {
       rideId,
       rating,
+    });
+  }
+
+  /**
+   * Notify Ride Cancellation
+   * Notifies both rider and driver that the ride has been cancelled
+   */
+  notifyRideCancelled(rideId: string, cancelledBy: string, reason?: string) {
+    if (!this.server) return;
+    this.logger.debug(`Ride ${rideId} cancelled by ${cancelledBy}`);
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.RIDE_CANCELLED, {
+      rideId,
+      cancelledBy,
+      reason,
     });
   }
 }

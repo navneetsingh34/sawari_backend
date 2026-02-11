@@ -33,7 +33,7 @@ export class SubscriptionsService {
     @InjectModel(Subscription.name)
     private subscriptionModel: Model<SubscriptionDocument>,
     private readonly walletService: WalletService,
-  ) {}
+  ) { }
 
   /**
    * Purchase a Plan
@@ -62,11 +62,16 @@ export class SubscriptionsService {
     // d. If Wallet Balance: Directly debit (as done here)
     //
     // For now, we assume the wallet is pre-funded or this is a direct debit.
+    // Generate unique reference ID for this specific purchase instance
+    // We append timestamp to planId to ensure idempotency works for THIS purchase 
+    // but doesn't block future purchases of the same plan.
+    const purchaseRef = `${planId}_${Date.now()}`;
+
     await this.walletService.debitWallet(
       driverId,
       plan.price,
       TransactionReason.SUBSCRIPTION,
-      planId, // Use planId as reference
+      purchaseRef,
       { planDays: plan.days },
       false, // Do not allow overdraft for subscriptions
     );

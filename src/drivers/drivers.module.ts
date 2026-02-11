@@ -18,7 +18,7 @@ import { Ride, RideSchema } from '../rides/schemas/ride.schema';
       { name: User.name, schema: UserSchema }, // Need User model for role checking
       { name: Ride.name, schema: RideSchema },
     ]),
-    RealtimeModule,
+    forwardRef(() => RealtimeModule),
     forwardRef(() => RidesModule),
   ],
   controllers: [DriversController],

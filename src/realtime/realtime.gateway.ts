@@ -21,6 +21,8 @@ import { RealtimeEvents } from './events/event.constants';
 import { UserRole } from '../common/constants/user-roles.constant';
 import { RidesService } from '../rides/rides.service';
 
+import { DriversService } from '../drivers/drivers.service';
+
 @WebSocketGateway({
   cors: {
     origin: '*', // Allow all for dev, restrict in prod
@@ -29,8 +31,7 @@ import { RidesService } from '../rides/rides.service';
 })
 @Injectable()
 export class RealtimeGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -41,7 +42,9 @@ export class RealtimeGateway
     private readonly socketAuthGuard: SocketAuthGuard,
     @Inject(forwardRef(() => RidesService))
     private readonly ridesService: RidesService,
-  ) {}
+    @Inject(forwardRef(() => DriversService))
+    private readonly driversService: DriversService,
+  ) { }
 
   afterInit(server: Server) {
     this.realtimeService.setServer(server);
@@ -53,11 +56,11 @@ export class RealtimeGateway
     try {
       const token =
         client.handshake.auth?.token || client.handshake.headers.authorization;
-      
+
       this.logger.log(`Client connected: ${client.id}`);
       this.logger.debug(`Token received: ${token ? 'Yes' : 'No'}`);
       this.logger.debug(`Auth object: ${JSON.stringify(client.handshake.auth)}`);
-      
+
       if (!token) {
         this.logger.warn(`No token provided for client ${client.id}`);
       }
@@ -99,13 +102,45 @@ export class RealtimeGateway
     // Auto-join private user room
     client.join(`user:${user.sub}`);
 
-    // If driver joins 'drivers' room, send them available rides
+    // If driver joins 'drivers' room, assign special rooms too
     if (room === 'drivers' && user.role === UserRole.DRIVER) {
-      const availableRides = await this.ridesService.findAvailableRides();
-      client.emit(RealtimeEvents.RIDES_AVAILABLE, availableRides);
-      this.logger.debug(
-        `Sent ${availableRides.length} available rides to driver ${user.sub}`,
-      );
+      try {
+        const profile = await this.driversService.getProfile(user.sub);
+        // Default to CAR if missing
+        const vType = profile.vehicleInfo?.vehicleType ? profile.vehicleInfo.vehicleType.toUpperCase() : 'CAR';
+
+        client.join(`drivers:${vType}`);
+        this.logger.debug(`Driver ${user.sub} joined drivers:${vType}`);
+
+        // AC Room
+        // Check if features exist (legacy support)
+        if (profile.vehicleInfo?.features?.hasAc) {
+          client.join(`drivers:${vType}_AC`);
+          this.logger.debug(`Driver ${user.sub} joined drivers:${vType}_AC`);
+        }
+
+        // Shared Room
+        if (profile.vehicleInfo?.features?.allowsSharing) {
+          client.join(`drivers:${vType}_SHARED`);
+        }
+
+        // Send ALL available rides (not filtered by vehicle type for better visibility)
+        // Drivers can choose which rides to accept
+        const availableRides = await this.ridesService.findAvailableRides();
+        client.emit(RealtimeEvents.RIDES_AVAILABLE, availableRides);
+        this.logger.debug(
+          `Sent ${availableRides.length} available rides to driver ${user.sub} (vehicleType: ${vType})`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to assign vehicle rooms for ${user.sub}`, err);
+        // Even if profile fetch fails, try to send available rides
+        try {
+          const availableRides = await this.ridesService.findAvailableRides();
+          client.emit(RealtimeEvents.RIDES_AVAILABLE, availableRides);
+        } catch (e) {
+          this.logger.error(`Failed to fetch available rides`, e);
+        }
+      }
     }
   }
 

@@ -13,6 +13,7 @@ import {
   ValidateNested,
   Min,
   Max,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -40,6 +41,18 @@ export class LocationDto {
   address?: string;
 }
 
+export class RideOptionsDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  hasAc?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  isShared?: boolean;
+}
+
 export class CreateRideDto {
   @ApiProperty({ description: 'Pickup Location' })
   @ValidateNested()
@@ -62,4 +75,15 @@ export class CreateRideDto {
   @IsNumber()
   @Min(1)
   customFare?: number;
+
+  @ApiProperty({ description: 'Vehicle Type: MOTO, AUTO, CAR, PREMIER', example: 'CAR' })
+  @IsOptional()
+  @IsString()
+  vehicleType?: string;
+
+  @ApiProperty({ description: 'Ride Options', example: { hasAc: true, isShared: false } })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RideOptionsDto)
+  rideOptions?: RideOptionsDto;
 }

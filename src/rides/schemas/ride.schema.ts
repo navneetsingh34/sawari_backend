@@ -64,6 +64,22 @@ export class Ride {
   })
   status: RideStatus;
 
+  // Vehicle Requirements
+  @Prop({ required: true, default: 'CAR' })
+  vehicleType: string; // MOTO, AUTO, CAR, PREMIER
+
+  @Prop({
+    type: {
+      hasAc: { type: Boolean, default: false },
+      isShared: { type: Boolean, default: false }
+    },
+    default: { hasAc: false, isShared: false }
+  })
+  rideOptions: {
+    hasAc: boolean;
+    isShared: boolean;
+  };
+
   // Financials
   @Prop({ required: true })
   suggestedFare: number;

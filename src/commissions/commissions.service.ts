@@ -13,14 +13,14 @@ import { TransactionReason } from '../wallet/schemas/transaction.schema';
 @Injectable()
 export class CommissionsService {
   private readonly logger = new Logger(CommissionsService.name);
-  private readonly COMMISSION_RATE = 0.1; // 10% Standard
+  private readonly COMMISSION_RATE = 0.05; // 5% Standard
 
   constructor(
     @InjectModel(CommissionLog.name)
     private commissionModel: Model<CommissionLogDocument>,
     private readonly subscriptionsService: SubscriptionsService,
     private readonly walletService: WalletService,
-  ) {}
+  ) { }
 
   /**
    * Process Commission for Compelted Ride
