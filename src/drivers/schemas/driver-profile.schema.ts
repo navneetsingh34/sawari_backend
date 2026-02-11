@@ -133,4 +133,4 @@ export const DriverProfileSchema = SchemaFactory.createForClass(DriverProfile);
 
 // Ensure 2dsphere index is created for geospatial queries
 // This is required for $geoNear aggregation to work
-
+// DriverProfileSchema.index({ currentLocation: '2dsphere' }); // Handled by @Prop({ index: '2dsphere' })
