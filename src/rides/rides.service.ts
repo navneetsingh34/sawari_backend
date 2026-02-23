@@ -18,11 +18,12 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { Ride, RideDocument } from './schemas/ride.schema';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { RideHistoryQueryDto } from './dto/ride-history-query.dto';
 import { RideStatus } from './enums/ride-status.enum';
-import { User } from '../users/schemas/user.schema';
+import { User, UserDocument } from '../users/schemas/user.schema';
 import { UserRole } from '../common/constants/user-roles.constant';
 import { LocationService } from '../location/location.service';
 import { LocationUtil } from '../common/utils/location.util';
@@ -35,6 +36,7 @@ export class RidesService {
 
   constructor(
     @InjectModel(Ride.name) private rideModel: Model<RideDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly locationService: LocationService,
     private readonly realtimeService: RealtimeService,
     private readonly commissionsService: CommissionsService,
@@ -614,5 +616,230 @@ export class RidesService {
     this.logger.log(
       `Driver ${driverId} average rating: ${averageRating.toFixed(2)} from ${rides.length} reviews`,
     );
+  }
+
+  // ============ SOS Feature ============
+
+  /**
+   * Trigger SOS Alert
+   * Creates an SOS session with unique tracking ID.
+   * Returns emergency contacts list + tracking URL so frontend can send SMS.
+   * Both riders and drivers can trigger SOS during an active ride.
+   */
+  async triggerSOS(
+    rideId: string,
+    userId: string,
+    role: string,
+    location?: { latitude: number; longitude: number },
+  ): Promise<{
+    ride: RideDocument;
+    sosSessionId: string;
+    emergencyContacts: { name: string; phone: string; relation?: string }[];
+    trackingUrl: string;
+    userName: string;
+  }> {
+    const ride = await this.findById(rideId);
+
+    // Validate user is participant
+    const isRider = ride.riderId.toString() === userId;
+    const isDriver = ride.driverId && ride.driverId.toString() === userId;
+
+    if (!isRider && !isDriver) {
+      throw new ForbiddenException('Not a participant in this ride');
+    }
+
+    // Only allow SOS on active rides
+    const activeStatuses = [
+      RideStatus.ACCEPTED,
+      RideStatus.ARRIVED,
+      RideStatus.STARTED,
+    ];
+    if (!activeStatuses.includes(ride.status as RideStatus)) {
+      throw new BadRequestException('SOS can only be triggered during an active ride');
+    }
+
+    // Fetch the user's emergency contacts
+    const user = await this.userModel.findById(userId).exec();
+    const emergencyContacts = user?.emergencyContacts || [];
+
+    // Generate unique SOS session ID if not already active
+    let sosSessionId = ride.sosSessionId;
+    if (!sosSessionId || !ride.sosActive) {
+      sosSessionId = uuidv4();
+      ride.sosSessionId = sosSessionId;
+      ride.sosActive = true;
+      ride.sosActivatedAt = new Date();
+      ride.sosLocationHistory = [];
+    }
+
+    const triggeredBy = isRider ? 'RIDER' : 'DRIVER';
+    const coords = location
+      ? [location.longitude, location.latitude]
+      : ride.pickupLocation.coordinates;
+
+    const sosAlert = {
+      triggeredBy,
+      triggeredAt: new Date(),
+      location: {
+        type: 'Point',
+        coordinates: coords,
+      },
+      status: 'ACTIVE',
+    };
+
+    ride.sosAlerts = ride.sosAlerts || [];
+    ride.sosAlerts.push(sosAlert as any);
+
+    // Add initial location to history
+    if (location) {
+      ride.sosLocationHistory.push({
+        coordinates: [location.longitude, location.latitude],
+        timestamp: new Date(),
+      } as any);
+    }
+
+    const saved = await ride.save();
+
+    // REALTIME: Broadcast SOS to ride room
+    this.realtimeService.notifySOS(rideId, triggeredBy, sosAlert.location);
+
+    this.logger.warn(
+      `🚨 SOS triggered for ride ${rideId} by ${triggeredBy} (${userId}). Session: ${sosSessionId}`,
+    );
+
+    // Build tracking URL (relative - frontend should prepend base URL)
+    // Point to the HTML view, not the JSON API
+    const trackingUrl = `/api/v1/rides/${rideId}/sos/view/${sosSessionId}`;
+
+    return {
+      ride: saved,
+      sosSessionId,
+      emergencyContacts,
+      trackingUrl,
+      userName: user?.name || 'Unknown',
+    };
+  }
+
+  /**
+   * Update SOS Location
+   * Called continuously by the frontend to update live location during SOS.
+   */
+  async updateSOSLocation(
+    rideId: string,
+    userId: string,
+    location: { latitude: number; longitude: number },
+  ): Promise<{ success: boolean; pointsLogged: number }> {
+    const ride = await this.rideModel.findById(rideId).exec();
+    if (!ride) throw new NotFoundException('Ride not found');
+
+    // Validate participant
+    const isParticipant =
+      ride.riderId.toString() === userId ||
+      (ride.driverId && ride.driverId.toString() === userId);
+    if (!isParticipant) {
+      throw new ForbiddenException('Not a participant in this ride');
+    }
+
+    if (!ride.sosActive) {
+      throw new BadRequestException('No active SOS session');
+    }
+
+    // Push new location to history
+    await this.rideModel.findByIdAndUpdate(rideId, {
+      $push: {
+        sosLocationHistory: {
+          coordinates: [location.longitude, location.latitude],
+          timestamp: new Date(),
+        },
+      },
+    }).exec();
+
+    // Broadcast location update via WebSocket
+    this.realtimeService.notifySOS(rideId, 'LOCATION_UPDATE', {
+      type: 'Point',
+      coordinates: [location.longitude, location.latitude],
+    });
+
+    const updated = await this.rideModel.findById(rideId).exec();
+    return {
+      success: true,
+      pointsLogged: updated?.sosLocationHistory?.length || 0,
+    };
+  }
+
+  /**
+   * Get SOS Tracking Data (Public - no auth required)
+   * Returns live location data for emergency contacts viewing via tracking link.
+   */
+  async getSOSTracking(
+    rideId: string,
+    sessionId: string,
+  ): Promise<{
+    active: boolean;
+    activatedAt: Date | null;
+    currentLocation: { latitude: number; longitude: number } | null;
+    locationHistory: { latitude: number; longitude: number; timestamp: Date }[];
+    riderName: string;
+    pickup: string;
+    drop: string;
+  }> {
+    const ride = await this.rideModel
+      .findOne({ _id: rideId, sosSessionId: sessionId })
+      .populate('riderId', 'name phone')
+      .exec();
+
+    if (!ride) {
+      throw new NotFoundException('SOS session not found or expired');
+    }
+
+    const history = (ride.sosLocationHistory || []).map(h => ({
+      latitude: h.coordinates[1],
+      longitude: h.coordinates[0],
+      timestamp: h.timestamp,
+    }));
+
+    const lastLocation = history.length > 0 ? history[history.length - 1] : null;
+
+    return {
+      active: ride.sosActive || false,
+      activatedAt: ride.sosActivatedAt || null,
+      currentLocation: lastLocation
+        ? { latitude: lastLocation.latitude, longitude: lastLocation.longitude }
+        : null,
+      locationHistory: history,
+      riderName: (ride.riderId as any)?.name || 'Unknown',
+      pickup: ride.pickupLocation?.address || 'Unknown',
+      drop: ride.dropLocation?.address || 'Unknown',
+    };
+  }
+
+  /**
+   * Deactivate SOS Session
+   */
+  async deactivateSOS(
+    rideId: string,
+    userId: string,
+  ): Promise<{ success: boolean }> {
+    const ride = await this.rideModel.findById(rideId).exec();
+    if (!ride) throw new NotFoundException('Ride not found');
+
+    const isParticipant =
+      ride.riderId.toString() === userId ||
+      (ride.driverId && ride.driverId.toString() === userId);
+    if (!isParticipant) {
+      throw new ForbiddenException('Not a participant in this ride');
+    }
+
+    ride.sosActive = false;
+    // Mark all alerts as resolved
+    if (ride.sosAlerts?.length) {
+      ride.sosAlerts.forEach(alert => {
+        alert.status = 'RESOLVED';
+      });
+    }
+    await ride.save();
+
+    this.logger.log(`SOS deactivated for ride ${rideId} by ${userId}`);
+    return { success: true };
   }
 }

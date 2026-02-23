@@ -99,6 +99,20 @@ export class User {
   riderOtp?: string; // 4-digit OTP for riders only
 
   @Prop({
+    type: [{
+      name: { type: String, required: true },
+      phone: { type: String, required: true },
+      relation: { type: String, required: false },
+    }],
+    default: [],
+  })
+  emergencyContacts: {
+    name: string;
+    phone: string;
+    relation?: string;
+  }[];
+
+  @Prop({
     default: false,
     index: true,
   })

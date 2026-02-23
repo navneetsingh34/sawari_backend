@@ -7,6 +7,7 @@
  * - Get current user profile
  * - Update current user profile
  * - Soft delete current user account
+ * - Manage emergency contacts (SOS feature)
  *
  * Security:
  * - All endpoints protected by strict JWT Guard
@@ -17,9 +18,11 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Body,
+  Param,
   UseGuards,
   HttpStatus,
   HttpCode,
@@ -32,6 +35,7 @@ import {
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { AddEmergencyContactDto } from './dto/emergency-contact.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from './schemas/user.schema';
 
@@ -39,14 +43,10 @@ import { User } from './schemas/user.schema';
 @ApiBearerAuth('JWT')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   /**
    * Get My Profile
-   *
-   * Retrieves the profile of the currently authenticated user.
-   *
-   * @param user - Injected by @CurrentUser() decorator
    */
   @Get('profile')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -56,18 +56,11 @@ export class UsersController {
     type: User,
   })
   getProfile(@CurrentUser() user: User) {
-    // The user object is already attached to request by JwtStrategy
-    // and transformed by UserSchema toJSON (removing password/tokens)
     return user;
   }
 
   /**
    * Update My Profile
-   *
-   * Updates allowed fields (name) for the current user.
-   *
-   * @param userId - ID from current authenticated user
-   * @param updateDto - Validated update data
    */
   @Patch('profile')
   @ApiOperation({ summary: 'Update current user profile' })
@@ -86,10 +79,6 @@ export class UsersController {
 
   /**
    * Delete My Account (Soft Delete)
-   *
-   * Deactivates the account and invalidates tokens.
-   *
-   * @param userId - ID from current authenticated user
    */
   @Delete('profile')
   @HttpCode(HttpStatus.OK)
@@ -100,5 +89,36 @@ export class UsersController {
   })
   async deleteAccount(@CurrentUser('id') userId: string) {
     return this.usersService.softDelete(userId);
+  }
+
+  // ============ Emergency Contacts (SOS Feature) ============
+
+  @Get('emergency-contacts')
+  @ApiOperation({ summary: 'Get all emergency contacts' })
+  @ApiResponse({ status: 200, description: 'Emergency contacts list' })
+  async getEmergencyContacts(@CurrentUser('id') userId: string) {
+    return this.usersService.getEmergencyContacts(userId);
+  }
+
+  @Post('emergency-contacts')
+  @ApiOperation({ summary: 'Add an emergency contact (max 5)' })
+  @ApiResponse({ status: 201, description: 'Contact added successfully' })
+  @ApiResponse({ status: 400, description: 'Max contacts reached' })
+  async addEmergencyContact(
+    @CurrentUser('id') userId: string,
+    @Body() contactDto: AddEmergencyContactDto,
+  ) {
+    return this.usersService.addEmergencyContact(userId, contactDto);
+  }
+
+  @Delete('emergency-contacts/:phone')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove an emergency contact by phone' })
+  @ApiResponse({ status: 200, description: 'Contact removed successfully' })
+  async removeEmergencyContact(
+    @CurrentUser('id') userId: string,
+    @Param('phone') phone: string,
+  ) {
+    return this.usersService.removeEmergencyContact(userId, phone);
   }
 }

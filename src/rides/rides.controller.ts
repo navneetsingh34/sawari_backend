@@ -16,6 +16,7 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
+  Header,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,8 +32,10 @@ import { RideHistoryQueryDto } from './dto/ride-history-query.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CollectPaymentDto } from './dto/collect-payment.dto';
 import { SubmitReviewDto } from './dto/submit-review.dto';
+import { TriggerSosDto } from './dto/trigger-sos.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../common/constants/user-roles.constant';
 import { User } from '../users/schemas/user.schema';
@@ -209,5 +212,196 @@ export class RidesController {
       reviewDto.rating,
       reviewDto.review,
     );
+  }
+
+  // --- SOS / Emergency ---
+
+  @Post(':id/sos')
+  @ApiOperation({ summary: 'Trigger SOS emergency alert during a ride' })
+  @ApiResponse({ status: 201, description: 'SOS alert triggered, returns session info + emergency contacts' })
+  async triggerSOS(
+    @Param('id') rideId: string,
+    @CurrentUser() user: User,
+    @Body() sosDto: TriggerSosDto,
+  ) {
+    return this.ridesService.triggerSOS(
+      rideId,
+      (user as any).id,
+      user.role,
+      sosDto.latitude && sosDto.longitude
+        ? { latitude: sosDto.latitude, longitude: sosDto.longitude }
+        : undefined,
+    );
+  }
+
+  @Post(':id/sos/location')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update SOS live location (sent every few seconds)' })
+  async updateSOSLocation(
+    @Param('id') rideId: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: TriggerSosDto,
+  ) {
+    return this.ridesService.updateSOSLocation(
+      rideId,
+      userId,
+      { latitude: body.latitude!, longitude: body.longitude! },
+    );
+  }
+
+  @Get(':id/sos/track/:sessionId')
+  @Public()
+  @ApiOperation({ summary: 'Get SOS live tracking data (public - no auth required)' })
+  @ApiResponse({ status: 200, description: 'Returns live location data for emergency contacts' })
+  async getSOSTracking(
+    @Param('id') rideId: string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.ridesService.getSOSTracking(rideId, sessionId);
+  }
+
+  @Get(':id/sos/view/:sessionId')
+  @Public()
+  @Header('Content-Type', 'text/html')
+  @ApiOperation({ summary: 'Get SOS live tracking HTML page (public - no auth required)' })
+  async getSOSTrackingView(
+    @Param('id') rideId: string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    // Verify session exists
+    const data = await this.ridesService.getSOSTracking(rideId, sessionId);
+    const jsonUrl = `/api/v1/rides/${rideId}/sos/track/${sessionId}`;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Sawari SOS Live Tracking</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+        <style>
+          body { margin: 0; padding: 0; background: #1a1a1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+          #map { height: 100vh; width: 100%; }
+          .overlay {
+            position: absolute; bottom: 20px; left: 20px; right: 20px;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(10px);
+            padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 68, 68, 0.3);
+            z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+          }
+          .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+          .title { font-size: 18px; font-weight: 800; color: #ff4444; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
+          .status-badge { background: #ff4444; color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; animation: pulse 2s infinite; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #ccc; }
+          .label { color: #888; font-size: 12px; }
+          .value { font-weight: 600; }
+          @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+          
+          /* Custom marker pulse */
+          .sos-marker-icon {
+            background: rgba(255, 68, 68, 0.3);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+          }
+          .sos-marker-dot {
+            width: 16px; height: 16px; background: #ff4444; border-radius: 50%;
+            border: 2px solid white; box-shadow: 0 0 10px #ff4444;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <div class="overlay">
+          <div class="header">
+            <div class="title">🚨 SOS ACTIVE</div>
+            <div class="status-badge">LIVE</div>
+          </div>
+          <div class="info-row">
+            <div><div class="label">RIDER</div><div class="value">${data.riderName}</div></div>
+            <div style="text-align: right"><div class="label">ACTIVATED AT</div><div class="value" id="time">Just now</div></div>
+          </div>
+          <div class="info-row" style="margin-top: 15px; border-top: 1px solid #333; padding-top: 15px;">
+             <div><div class="label">LAST UPDATE</div><div class="value" id="last-update">Waiting...</div></div>
+          </div>
+        </div>
+
+        <script>
+          // Premium Dark Map Style
+          const map = L.map('map', { zoomControl: false }).setView([${data.currentLocation?.latitude || 0}, ${data.currentLocation?.longitude || 0}], 15);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+          }).addTo(map);
+
+          // Custom Marker Icon
+          const sosIcon = L.divIcon({
+            className: 'sos-marker-icon',
+            html: '<div class="sos-marker-dot"></div>',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+          });
+
+          let marker = L.marker([${data.currentLocation?.latitude || 0}, ${data.currentLocation?.longitude || 0}], {icon: sosIcon}).addTo(map);
+          let pathLine = L.polyline([], {color: '#ff4444', weight: 4, opacity: 0.7}).addTo(map);
+
+          // Update Logic
+          async function updateLocation() {
+            try {
+              const res = await fetch('${jsonUrl}');
+              const data = await res.json();
+              
+              if (data.active === false) {
+                 document.querySelector('.status-badge').style.background = '#444';
+                 document.querySelector('.status-badge').innerText = 'RESOLVED';
+                 document.querySelector('.status-badge').style.animation = 'none';
+                 return;
+              }
+
+              if (data.currentLocation) {
+                const { latitude, longitude } = data.currentLocation;
+                const newLatLng = [latitude, longitude];
+                
+                marker.setLatLng(newLatLng);
+                map.panTo(newLatLng);
+                
+                // Update timestamp
+                const date = new Date();
+                document.getElementById('last-update').innerText = date.toLocaleTimeString();
+                
+                // Update history line
+                if (data.locationHistory && data.locationHistory.length > 0) {
+                   const latlngs = data.locationHistory.map(h => [h.latitude, h.longitude]);
+                   pathLine.setLatLngs(latlngs);
+                }
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
+
+          // Initial load
+          const historyCoords = ${JSON.stringify((data.locationHistory || []).map(h => [h.latitude, h.longitude]))};
+          if (historyCoords.length > 0) {
+             pathLine.setLatLngs(historyCoords);
+          }
+          
+          // Poll every 3 seconds
+          setInterval(updateLocation, 3000);
+          updateLocation();
+        </script>
+      </body>
+      </html>
+    `;
+  }
+
+  @Post(':id/sos/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Deactivate SOS emergency session' })
+  async deactivateSOS(
+    @Param('id') rideId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ridesService.deactivateSOS(rideId, userId);
   }
 }

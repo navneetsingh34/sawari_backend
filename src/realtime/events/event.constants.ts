@@ -46,4 +46,8 @@ export const RealtimeEvents = {
   // Review
   REVIEW_REQUEST: 'review:request', // To Rider: Request driver review
   REVIEW_SUBMITTED: 'review:submitted', // To Driver: Review received
+
+  // SOS / Emergency
+  SOS_TRIGGERED: 'sos:triggered', // To Both + Admin: SOS alert activated
+  SOS_RESOLVED: 'sos:resolved', // To Both + Admin: SOS resolved
 };

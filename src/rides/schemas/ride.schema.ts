@@ -124,6 +124,48 @@ export class Ride {
 
   @Prop({ required: false })
   reviewedAt?: Date;
+
+  // SOS Emergency Alerts
+  @Prop({
+    type: [{
+      triggeredBy: { type: String, enum: ['RIDER', 'DRIVER'], required: true },
+      triggeredAt: { type: Date, default: Date.now },
+      location: {
+        type: { type: String, enum: ['Point'], default: 'Point' },
+        coordinates: { type: [Number], required: true },
+      },
+      status: { type: String, enum: ['ACTIVE', 'RESOLVED'], default: 'ACTIVE' },
+    }],
+    default: [],
+  })
+  sosAlerts: {
+    triggeredBy: string;
+    triggeredAt: Date;
+    location: { type: string; coordinates: number[] };
+    status: string;
+  }[];
+
+  // SOS Live Tracking Session
+  @Prop({ required: false, index: true, sparse: true })
+  sosSessionId?: string; // Unique UUID for public tracking link
+
+  @Prop({ default: false })
+  sosActive?: boolean;
+
+  @Prop({
+    type: [{
+      coordinates: { type: [Number], required: true }, // [lng, lat]
+      timestamp: { type: Date, default: Date.now },
+    }],
+    default: [],
+  })
+  sosLocationHistory: {
+    coordinates: number[];
+    timestamp: Date;
+  }[];
+
+  @Prop({ required: false })
+  sosActivatedAt?: Date;
 }
 
 export const RideSchema = SchemaFactory.createForClass(Ride);

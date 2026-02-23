@@ -194,4 +194,19 @@ export class RealtimeService {
       reason,
     });
   }
+
+  /**
+   * Broadcast SOS Alert
+   * Notifies both parties in the ride room about the emergency.
+   */
+  notifySOS(rideId: string, triggeredBy: string, location: any) {
+    if (!this.server) return;
+    this.logger.warn(`🚨 SOS Alert broadcast for ride ${rideId} by ${triggeredBy}`);
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.SOS_TRIGGERED, {
+      rideId,
+      triggeredBy,
+      location,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
