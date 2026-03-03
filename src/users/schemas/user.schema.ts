@@ -113,6 +113,17 @@ export class User {
   }[];
 
   @Prop({
+    required: false,
+    type: String,
+  })
+  pushToken?: string;
+
+  @Prop({
+    default: true,
+  })
+  pushEnabled: boolean;
+
+  @Prop({
     default: false,
     index: true,
   })

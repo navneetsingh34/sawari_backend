@@ -188,11 +188,18 @@ export class RealtimeService {
   notifyRideCancelled(rideId: string, cancelledBy: string, reason?: string) {
     if (!this.server) return;
     this.logger.debug(`Ride ${rideId} cancelled by ${cancelledBy}`);
-    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.RIDE_CANCELLED, {
+    
+    const payload = {
       rideId,
       cancelledBy,
       reason,
-    });
+    };
+    
+    // Notify the specific ride room (for drivers in ActiveRideScreen or riders tracking it)
+    this.server.to(`ride:${rideId}`).emit(RealtimeEvents.RIDE_CANCELLED, payload);
+    
+    // Also broadcast to the generic 'drivers' room to clear from available pools or active status on Home
+    this.server.to('drivers').emit(RealtimeEvents.RIDE_CANCELLED, payload);
   }
 
   /**

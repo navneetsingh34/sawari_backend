@@ -27,4 +27,19 @@ export class UpdateUserProfileDto {
   @MinLength(2)
   @MaxLength(50)
   name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Expo Push Token for notifications',
+    example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+  })
+  @IsOptional()
+  @IsString()
+  pushToken?: string;
+
+  @ApiPropertyOptional({
+    description: 'Toggle to enable/disable push notifications',
+    example: true,
+  })
+  @IsOptional()
+  pushEnabled?: boolean;
 }
