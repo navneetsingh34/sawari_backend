@@ -26,6 +26,7 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -74,7 +75,12 @@ export class UsersController {
     @CurrentUser('id') userId: string,
     @Body() updateDto: UpdateUserProfileDto,
   ) {
-    return this.usersService.updateProfile(userId, updateDto);
+    // Convert date string if present
+    const updateData: any = { ...updateDto };
+    if (updateData.dateOfBirth) {
+      updateData.dateOfBirth = new Date(updateData.dateOfBirth);
+    }
+    return this.usersService.updateProfile(userId, updateData);
   }
 
   /**
@@ -120,5 +126,28 @@ export class UsersController {
     @Param('phone') phone: string,
   ) {
     return this.usersService.removeEmergencyContact(userId, phone);
+  }
+
+  // ============ Recent Searches ============
+
+  @Get('recent-searches')
+  @ApiOperation({ summary: 'Get recent location searches' })
+  getRecentSearches(@CurrentUser('id') userId: string) {
+    return this.usersService.getRecentSearches(userId);
+  }
+
+  @Post('recent-searches')
+  @ApiOperation({ summary: 'Add a new recent search' })
+  addRecentSearch(@CurrentUser('id') userId: string, @Body() body: { address: string; latitude: number; longitude: number }) {
+    if (!body.address || !body.latitude || !body.longitude) {
+      throw new BadRequestException('Address, latitude, and longitude are required');
+    }
+    return this.usersService.addRecentSearch(userId, body);
+  }
+
+  @Delete('recent-searches')
+  @ApiOperation({ summary: 'Clear all recent searches' })
+  clearRecentSearches(@CurrentUser('id') userId: string) {
+    return this.usersService.clearRecentSearches(userId);
   }
 }

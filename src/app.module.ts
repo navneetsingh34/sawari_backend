@@ -56,6 +56,12 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { CommissionsModule } from './commissions/commissions.module';
 import { WalletModule } from './wallet/wallet.module';
 import { AdminModule } from './admin/admin.module';
+import { PaymentModule } from './payment/payment.module';
+import { OffersModule } from './offers/offers.module';
+import { CoinsModule } from './coins/coins.module';
+import { SettingsModule } from './settings/settings.module';
+import { HelpModule } from './help/help.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -121,6 +127,18 @@ import { AdminModule } from './admin/admin.module';
     // Admin Module
     // Platform Monitoring & Moderation
     AdminModule,
+
+    PaymentModule,
+
+    OffersModule,
+
+    CoinsModule,
+
+    SettingsModule,
+
+    HelpModule,
+
+    ChatbotModule,
 
     // Future modules will be added here:
     // PaymentsModule

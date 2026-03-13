@@ -56,6 +56,29 @@ export class User {
   })
   email: string;
 
+  @Prop({ default: 0 })
+  ridexaCoins: number; // Ridexa loyalty coins balance
+
+  @Prop({ required: false })
+  profilePhoto?: string; // Optional user profile photo
+
+  @Prop({ required: false, enum: ['MALE', 'FEMALE', 'OTHER'] })
+  gender?: string;
+
+  @Prop({ required: false })
+  dateOfBirth?: Date;
+
+  @Prop({
+    type: [{
+      address: { type: String, required: true },
+      latitude: { type: Number, required: true },
+      longitude: { type: Number, required: true },
+      searchedAt: { type: Date, default: Date.now }
+    }],
+    default: []
+  })
+  recentSearches: { address: string; latitude: number; longitude: number; searchedAt: Date }[];
+
   @Prop({
     required: true,
     unique: true,

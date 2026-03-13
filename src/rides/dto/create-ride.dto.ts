@@ -14,9 +14,11 @@ import {
   Min,
   Max,
   IsBoolean,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { RideType } from '../enums/ride-type.enum';
 
 export class LocationDto {
   @ApiProperty({ example: 12.9716, description: 'Latitude' })
@@ -76,14 +78,29 @@ export class CreateRideDto {
   @Min(1)
   customFare?: number;
 
-  @ApiProperty({ description: 'Vehicle Type: MOTO, AUTO, CAR, PREMIER', example: 'CAR' })
+  @ApiProperty({ description: 'Vehicle Type: MOTO, AUTO, CAR, CAB_XL, PREMIER', example: 'CAR' })
   @IsOptional()
   @IsString()
   vehicleType?: string;
+
+  @ApiProperty({ description: 'Ride Type: CITY, INTERCITY, OUTSTATION, PARCEL', example: 'CITY' })
+  @IsOptional()
+  @IsString() // Can also use @IsEnum(RideType) but keeping it simple string matching
+  rideType?: RideType;
 
   @ApiProperty({ description: 'Ride Options', example: { hasAc: true, isShared: false } })
   @IsOptional()
   @ValidateNested()
   @Type(() => RideOptionsDto)
   rideOptions?: RideOptionsDto;
+
+  @ApiPropertyOptional({ description: 'Schedule this ride for later' })
+  @IsOptional()
+  @IsBoolean()
+  isScheduled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Date and time for scheduled ride (ISO string)' })
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
 }

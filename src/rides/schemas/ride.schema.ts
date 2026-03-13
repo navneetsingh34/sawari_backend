@@ -17,6 +17,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
 import { User } from '../../users/schemas/user.schema';
 import { RideStatus } from '../enums/ride-status.enum';
+import { RideType } from '../enums/ride-type.enum';
 
 export type RideDocument = Ride & Document;
 
@@ -66,7 +67,15 @@ export class Ride {
 
   // Vehicle Requirements
   @Prop({ required: true, default: 'CAR' })
-  vehicleType: string; // MOTO, AUTO, CAR, PREMIER
+  vehicleType: string; // MOTO, AUTO, CAR, CAB_XL, PREMIER
+
+  @Prop({
+    required: true,
+    enum: RideType,
+    default: RideType.CITY,
+    index: true,
+  })
+  rideType: RideType;
 
   @Prop({
     type: {
@@ -96,6 +105,19 @@ export class Ride {
 
   @Prop({ required: true })
   durationSeconds: number;
+
+  @Prop({ required: false })
+  remainingDistanceMeters?: number; // Updated when driver arrives/starts
+
+  @Prop({ required: false })
+  remainingDurationSeconds?: number;
+
+  // Scheduling
+  @Prop({ default: false })
+  isScheduled: boolean;
+
+  @Prop({ required: false })
+  scheduledAt?: Date;
 
   // Cancellation
   @Prop({ required: false })

@@ -246,6 +246,24 @@ export class UsersService {
     userId: string,
     updateData: Partial<User>,
   ): Promise<UserDocument> {
+    
+    // Check Email Uniqueness if updating email
+    if (updateData.email) {
+      updateData.email = updateData.email.toLowerCase();
+      const existingEmail = await this.userModel.findOne({ email: updateData.email, _id: { $ne: userId } });
+      if (existingEmail) {
+        throw new ConflictException('Email already in use by another account');
+      }
+    }
+
+    // Check Phone Uniqueness if updating phone
+    if (updateData.phone) {
+      const existingPhone = await this.userModel.findOne({ phone: updateData.phone, _id: { $ne: userId } });
+      if (existingPhone) {
+        throw new ConflictException('Phone number already in use by another account');
+      }
+    }
+
     return this.userModel
       .findByIdAndUpdate(
         userId,
@@ -358,4 +376,40 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
     return user.emergencyContacts || [];
   }
+
+  // ============ Recent Searches ============
+
+  async getRecentSearches(userId: string) {
+    const user = await this.userModel.findById(userId).select('recentSearches').exec();
+    if (!user) throw new NotFoundException('User not found');
+    return user.recentSearches || [];
+  }
+
+  async addRecentSearch(userId: string, search: { address: string; latitude: number; longitude: number }) {
+    // We keep only the last 10 searches, removing duplicates based on address/coordinates
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) throw new NotFoundException('User not found');
+
+    let searches = user.recentSearches || [];
+    
+    // Remove if already exists (to move it to top)
+    searches = searches.filter(s => s.address !== search.address);
+    
+    // Add new search to start
+    searches.unshift({ ...search, searchedAt: new Date() });
+    
+    // Cap at 10
+    if (searches.length > 10) {
+      searches = searches.slice(0, 10);
+    }
+    
+    user.recentSearches = searches;
+    await user.save();
+    return user.recentSearches;
+  }
+
+  async clearRecentSearches(userId: string) {
+    return this.userModel.findByIdAndUpdate(userId, { recentSearches: [] }, { new: true }).exec();
+  }
 }
+

@@ -54,7 +54,11 @@ export class RidesService {
       drop.longitude,
     );
 
-    const estimatedFare = this.calculateFare(route.distanceMeters);
+    const estimatedFare = this.calculateFare(
+      route.distanceMeters, 
+      estimateDto.vehicleType, 
+      estimateDto.rideType
+    );
 
     return {
       distanceMeters: route.distanceMeters,
@@ -65,12 +69,60 @@ export class RidesService {
 
   /**
    * Calculate Fare
-   * Base Fare: 30
-   * Per Km: 12
+   * Base Fare varies by vehicle type
    */
-  private calculateFare(distanceMeters: number): number {
+  private calculateFare(distanceMeters: number, vehicleType: string = 'CAR', rideType: string = 'CITY'): number {
     const distanceKm = distanceMeters / 1000;
-    return Math.round(30 + distanceKm * 12);
+    
+    // Base and Per Km Rates by Vehicle Type
+    let baseFare = 30;
+    let ratePerKm = 12;
+
+    switch (vehicleType.toUpperCase()) {
+      case 'MOTO':
+        baseFare = 15;
+        ratePerKm = 7;
+        break;
+      case 'AUTO':
+        baseFare = 25;
+        ratePerKm = 10;
+        break;
+      case 'CAR':
+        baseFare = 30;
+        ratePerKm = 12;
+        break;
+      case 'CAB_XL':
+        baseFare = 50;
+        ratePerKm = 16;
+        break;
+      case 'PREMIER':
+        baseFare = 60;
+        ratePerKm = 20;
+        break;
+    }
+
+    // Adjust for Ride Type (Bulk/Distance discounts)
+    let typeMultiplier = 1.0;
+    switch (rideType.toUpperCase()) {
+      case 'INTERCITY':
+        typeMultiplier = 0.9; // 10% off per km for longer distance
+        break;
+      case 'OUTSTATION':
+        typeMultiplier = 0.85; // 15% off per km for round trips
+        break;
+      case 'PARCEL':
+        typeMultiplier = 0.7; // 30% off (no passenger, easier loading)
+        break;
+      case 'CITY':
+      default:
+        typeMultiplier = 1.0;
+    }
+
+    // Dynamic surge can be added here (e.g. 1.2x during rush hour)
+    const surgeMultiplier = 1.0;
+
+    const totalFare = (baseFare + (distanceKm * ratePerKm)) * typeMultiplier * surgeMultiplier;
+    return Math.round(totalFare);
   }
 
   /**
@@ -96,7 +148,11 @@ export class RidesService {
       drop.latitude,
       drop.longitude,
     );
-    const estimatedFare = this.calculateFare(route.distanceMeters);
+    const estimatedFare = this.calculateFare(
+      route.distanceMeters, 
+      createDto.vehicleType, 
+      createDto.rideType
+    );
 
     const ride = new this.rideModel({
       riderId,
@@ -116,16 +172,21 @@ export class RidesService {
       suggestedFare: estimatedFare,
       customFare: createDto.customFare, // Store rider's offered amount
       vehicleType: createDto.vehicleType || 'CAR',
+      rideType: createDto.rideType || 'CITY',
       rideOptions: {
         hasAc: createDto.rideOptions?.hasAc || false,
         isShared: createDto.rideOptions?.isShared || false
-      }
+      },
+      isScheduled: createDto.isScheduled || false,
+      scheduledAt: createDto.scheduledAt ? new Date(createDto.scheduledAt) : undefined,
     });
 
     const savedRide = await ride.save();
 
-    // REALTIME: Alert Drivers immediately
-    this.realtimeService.alertDrivers(savedRide);
+    // REALTIME: Alert Drivers immediately ONLY if it's not a scheduled ride
+    if (!savedRide.isScheduled) {
+      this.realtimeService.alertDrivers(savedRide);
+    }
 
     return savedRide;
   }
@@ -193,10 +254,34 @@ export class RidesService {
     this.validateTransition(ride.status, RideStatus.ARRIVED);
 
     ride.status = RideStatus.ARRIVED;
+
+    // FEATURE 7 FIX: Re-calculate remaining distance and time
+    if (location) {
+      try {
+        const route = await this.locationService.calculateRoute(
+          location.lat,
+          location.lng,
+          ride.dropLocation.coordinates[1], // drop lat
+          ride.dropLocation.coordinates[0], // drop lng
+        );
+
+        ride.remainingDistanceMeters = route.distanceMeters;
+        ride.remainingDurationSeconds = route.durationSeconds;
+        
+        // Optionally update suggested fare if route changed significantly
+        // But usually fare is locked in at requested time unless custom rules apply
+      } catch (err) {
+        this.logger.error(`Failed to recalculate route on arrival: ${err.message}`);
+      }
+    }
+
     const saved = await ride.save();
 
-    // REALTIME: Notify Rider with driver location
-    this.realtimeService.updateRideStatus(rideId, RideStatus.ARRIVED);
+    // REALTIME: Notify Rider with driver location and updated ETA
+    this.realtimeService.updateRideStatus(rideId, RideStatus.ARRIVED, {
+      remainingDistanceMeters: ride.remainingDistanceMeters,
+      remainingDurationSeconds: ride.remainingDurationSeconds
+    });
     if (location) {
       this.realtimeService.notifyDriverArrived(rideId, location);
     }
