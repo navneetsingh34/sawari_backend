@@ -84,8 +84,28 @@ export class BidsService {
 
     const savedBid = await bid.save();
 
+    // Re-fetch bid with populated driver to send via websocket
+    const populatedBid: any = await this.bidModel
+      .findById(savedBid._id)
+      .populate('driverId', 'name phone')
+      .lean()
+      .exec();
+
+    // Attach vehicle info for realtime event
+    if (populatedBid && driverProfile) {
+      populatedBid.driverId.vehicle = {
+        type: driverProfile.vehicleInfo?.vehicleType || 'CAR',
+        make: driverProfile.vehicleInfo?.vehicleModel || '',
+        model: '', // optional
+        licensePlate: driverProfile.vehicleInfo?.vehicleNumber || '',
+        color: driverProfile.vehicleInfo?.vehicleColor || '',
+      };
+      populatedBid.driverId.rating = driverProfile.rating;
+      populatedBid.driverId.totalRides = driverProfile.totalRides;
+    }
+
     // 6. REALTIME: Notify Rider of new bid
-    this.realtimeService.notifyNewBid(rideId, savedBid);
+    this.realtimeService.notifyNewBid(rideId, populatedBid || savedBid);
 
     return savedBid;
   }
@@ -93,12 +113,31 @@ export class BidsService {
   /**
    * Get Active Bids for a Ride
    */
-  async getBidsForRide(rideId: string): Promise<BidDocument[]> {
-    return this.bidModel
+  async getBidsForRide(rideId: string): Promise<any[]> {
+    const bids = await this.bidModel
       .find({ rideId, status: BidStatus.ACTIVE })
       .sort({ amount: 1 })
       .populate('driverId', 'name phone')
+      .lean()
       .exec();
+
+    return Promise.all(bids.map(async (bid: any) => {
+      try {
+        const profile = await this.driversService.getProfile(bid.driverId._id.toString());
+        bid.driverId.vehicle = {
+          type: profile.vehicleInfo?.vehicleType || 'CAR',
+          make: profile.vehicleInfo?.vehicleModel || '',
+          model: '', // Optional, frontend joins them
+          licensePlate: profile.vehicleInfo?.vehicleNumber || '',
+          color: profile.vehicleInfo?.vehicleColor || '',
+        };
+        bid.driverId.rating = profile.rating;
+        bid.driverId.totalRides = profile.totalRides;
+      } catch (err) {
+        // Ignore if profile fetch fails
+      }
+      return bid;
+    }));
   }
 
   /**

@@ -24,6 +24,7 @@ import { CreateRideDto } from './dto/create-ride.dto';
 import { RideHistoryQueryDto } from './dto/ride-history-query.dto';
 import { RideStatus } from './enums/ride-status.enum';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import { DriverProfile, DriverProfileDocument } from '../drivers/schemas/driver-profile.schema';
 import { UserRole } from '../common/constants/user-roles.constant';
 import { LocationService } from '../location/location.service';
 import { LocationUtil } from '../common/utils/location.util';
@@ -37,6 +38,7 @@ export class RidesService {
   constructor(
     @InjectModel(Ride.name) private rideModel: Model<RideDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(DriverProfile.name) private driverProfileModel: Model<DriverProfileDocument>,
     private readonly locationService: LocationService,
     private readonly realtimeService: RealtimeService,
     private readonly commissionsService: CommissionsService,
@@ -78,26 +80,23 @@ export class RidesService {
     let baseFare = 30;
     let ratePerKm = 12;
 
+    let vehicleMultiplier = 1.0;
     switch (vehicleType.toUpperCase()) {
+      case 'BIKE':
       case 'MOTO':
-        baseFare = 15;
-        ratePerKm = 7;
+        vehicleMultiplier = 0.5;
         break;
       case 'AUTO':
-        baseFare = 25;
-        ratePerKm = 10;
+        vehicleMultiplier = 0.7;
         break;
       case 'CAR':
-        baseFare = 30;
-        ratePerKm = 12;
+        vehicleMultiplier = 1.0;
         break;
       case 'CAB_XL':
-        baseFare = 50;
-        ratePerKm = 16;
+        vehicleMultiplier = 1.5;
         break;
       case 'PREMIER':
-        baseFare = 60;
-        ratePerKm = 20;
+        vehicleMultiplier = 2.0;
         break;
     }
 
@@ -121,7 +120,7 @@ export class RidesService {
     // Dynamic surge can be added here (e.g. 1.2x during rush hour)
     const surgeMultiplier = 1.0;
 
-    const totalFare = (baseFare + (distanceKm * ratePerKm)) * typeMultiplier * surgeMultiplier;
+    const totalFare = (baseFare + (distanceKm * ratePerKm)) * vehicleMultiplier * typeMultiplier * surgeMultiplier;
     return Math.round(totalFare);
   }
 
@@ -230,6 +229,10 @@ export class RidesService {
 
     ride.driverId = driverId;
     ride.status = RideStatus.ACCEPTED;
+    // Lock in the final fare on direct accept (customFare = rider's offered amount)
+    if (!ride.finalFare) {
+      ride.finalFare = ride.customFare || ride.suggestedFare;
+    }
     const savedRide = await ride.save();
 
     // REALTIME: Notify Rider
@@ -514,13 +517,35 @@ export class RidesService {
    * Get Ride Details with Driver/Rider Info
    * For detail page - populates driver and rider data
    */
-  async getRideDetails(rideId: string): Promise<RideDocument> {
+  async getRideDetails(rideId: string): Promise<any> {
     const ride = await this.rideModel.findById(rideId)
       .populate('riderId', 'name phone email')
       .populate('driverId', 'name phone email')
+      .lean()
       .exec();
 
     if (!ride) throw new NotFoundException('Ride not found');
+
+    if (ride.driverId) {
+      try {
+        const dId = (ride.driverId as any)._id.toString();
+        const profile = await this.driverProfileModel.findOne({ userId: dId }).lean().exec();
+        if (profile) {
+          (ride.driverId as any).vehicle = {
+            type: profile.vehicleInfo?.vehicleType || 'CAR',
+            make: profile.vehicleInfo?.vehicleModel || '',
+            model: '', // optional
+            licensePlate: profile.vehicleInfo?.vehicleNumber || '',
+            color: profile.vehicleInfo?.vehicleColor || '',
+          };
+          (ride.driverId as any).rating = profile.rating;
+          (ride.driverId as any).totalRides = profile.totalRides;
+        }
+      } catch (err) {
+        // Safe to ignore if profile missing
+      }
+    }
+
     return ride;
   }
 
