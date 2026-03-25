@@ -178,6 +178,15 @@ export class RidesService {
       },
       isScheduled: createDto.isScheduled || false,
       scheduledAt: createDto.scheduledAt ? new Date(createDto.scheduledAt) : undefined,
+      senderName: createDto.senderName,
+      senderPhone: createDto.senderPhone,
+      receiverName: createDto.receiverName,
+      receiverPhone: createDto.receiverPhone,
+      parcelCategory: createDto.parcelCategory,
+      parcelWeight: createDto.parcelWeight,
+      fragile: createDto.fragile,
+      pickupOtp: createDto.rideType === 'PARCEL' ? Math.floor(1000 + Math.random() * 9000).toString() : undefined,
+      dropOtp: createDto.rideType === 'PARCEL' ? Math.floor(1000 + Math.random() * 9000).toString() : undefined,
     });
 
     const savedRide = await ride.save();
@@ -356,12 +365,19 @@ export class RidesService {
     this.validateTransition(ride.status, RideStatus.STARTED);
 
     // Verify OTP
-    const rider = ride.riderId as any;
-    if (!rider.riderOtp) {
-      throw new BadRequestException('Rider OTP not found');
+    let expectedOtp;
+    if (ride.rideType === 'PARCEL') {
+      expectedOtp = ride.pickupOtp;
+      if (!expectedOtp) throw new BadRequestException('Pickup OTP not found');
+    } else {
+      const rider = ride.riderId as any;
+      if (!rider.riderOtp) {
+        throw new BadRequestException('Rider OTP not found');
+      }
+      expectedOtp = rider.riderOtp;
     }
 
-    if (rider.riderOtp !== otp) {
+    if (expectedOtp !== otp) {
       // Notify failure
       this.realtimeService.notifyOtpResult(
         rideId,
@@ -399,7 +415,7 @@ export class RidesService {
     return saved;
   }
 
-  async completeRide(rideId: string, driverId: string): Promise<RideDocument> {
+  async completeRide(rideId: string, driverId: string, dropOtp?: string): Promise<RideDocument> {
     const ride = await this.rideModel
       .findById(rideId)
       .populate('riderId', '_id')
@@ -408,6 +424,12 @@ export class RidesService {
     if (!ride) throw new NotFoundException('Ride not found');
     this.verifyDriver(ride, driverId);
     this.validateTransition(ride.status, RideStatus.COMPLETED);
+
+    // If parcel, enforce dropOtp
+    if (ride.rideType === 'PARCEL') {
+      if (!dropOtp) throw new BadRequestException('Drop OTP is required for parcel deliveries');
+      if (ride.dropOtp !== dropOtp) throw new BadRequestException('Incorrect Drop OTP');
+    }
 
     // Check if payment was collected
     if (!ride.paymentCollected) {

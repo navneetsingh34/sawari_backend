@@ -160,8 +160,9 @@ export class RidesController {
   async complete(
     @Param('id') rideId: string,
     @CurrentUser('id') driverId: string,
+    @Body() body?: { dropOtp?: string },
   ) {
-    return this.ridesService.completeRide(rideId, driverId);
+    return this.ridesService.completeRide(rideId, driverId, body?.dropOtp);
   }
 
   // --- Common Actions ---
