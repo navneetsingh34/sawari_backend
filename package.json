@@ -1,5 +1,5 @@
 {
-  "name": "sawari_backend",
+  "name": "ridexa_backend",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -21,6 +21,7 @@
     "seed": "ts-node -r tsconfig-paths/register src/database/seeds/dev-seed.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",

@@ -11,7 +11,7 @@ import { MongoClient } from 'mongodb';
 
 async function createGeoIndex() {
     // Update this connection string to match your MongoDB setup
-    const connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017/sawari_db';
+    const connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridexa_db';
 
     const client = new MongoClient(connectionString);
 

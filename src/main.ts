@@ -172,7 +172,7 @@ async function bootstrap() {
 
   if (swaggerEnabled) {
     const config = new DocumentBuilder()
-      .setTitle('Sawari Ride-Hailing API')
+      .setTitle('RIDEXA Ride-Hailing API')
       .setDescription(
         'Production-grade REST API for ride-hailing application. ' +
           'This API provides endpoints for user authentication, ride management, ' +
@@ -199,7 +199,7 @@ async function bootstrap() {
 
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup(swaggerPath, app, document, {
-      customSiteTitle: 'Sawari API Documentation',
+      customSiteTitle: 'RIDEXA API Documentation',
       customCss: '.swagger-ui .topbar { display: none }',
       swaggerOptions: {
         persistAuthorization: true,

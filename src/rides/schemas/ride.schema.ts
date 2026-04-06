@@ -147,6 +147,9 @@ export class Ride {
   @Prop({ required: false })
   scheduledAt?: Date;
 
+  @Prop({ default: false })
+  isDispatched?: boolean;
+
   // Cancellation
   @Prop({ required: false })
   cancellationReason?: string;

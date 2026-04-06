@@ -23,9 +23,13 @@ export class RidesCleanupService {
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
         // Find rides that are stuck in REQUESTED or BIDDING for > 10 mins
+        // For scheduled rides, we measure 10 mins AFTER the scheduled time
         const expiredRides = await this.rideModel.find({
             status: { $in: [RideStatus.REQUESTED, RideStatus.BIDDING] },
-            createdAt: { $lt: tenMinutesAgo },
+            $or: [
+                { isScheduled: { $ne: true }, createdAt: { $lt: tenMinutesAgo } },
+                { isScheduled: true, scheduledAt: { $lt: tenMinutesAgo } }
+            ]
         });
 
         if (expiredRides.length === 0) {
