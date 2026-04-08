@@ -8,7 +8,6 @@ import { LocationModule } from '../location/location.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CommissionsModule } from '../commissions/commissions.module';
 import { RidesCleanupService } from './cron/rides-cleanup.service';
-import { ScheduledRidesService } from './cron/scheduled-rides.service';
 import { DriverProfile, DriverProfileSchema } from '../drivers/schemas/driver-profile.schema';
 
 @Module({
@@ -23,7 +22,7 @@ import { DriverProfile, DriverProfileSchema } from '../drivers/schemas/driver-pr
     CommissionsModule,
   ],
   controllers: [RidesController],
-  providers: [RidesService, RidesCleanupService, ScheduledRidesService],
+  providers: [RidesService, RidesCleanupService],
   exports: [RidesService],
 })
 export class RidesModule { }

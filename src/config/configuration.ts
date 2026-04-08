@@ -75,12 +75,12 @@ export default (): Configuration => ({
   app: {
     env: process.env.NODE_ENV || 'development',
     port: parseInt(process.env.PORT, 10) || 3000,
-    name: process.env.APP_NAME || 'RIDEXA Backend',
+    name: process.env.APP_NAME || 'Sawari Backend',
     apiPrefix: process.env.API_PREFIX || 'api',
     apiVersion: process.env.API_VERSION || 'v1',
   },
   database: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/ridexa',
+    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/sawari',
   },
   security: {
     jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',

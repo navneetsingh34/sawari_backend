@@ -160,9 +160,8 @@ export class RidesController {
   async complete(
     @Param('id') rideId: string,
     @CurrentUser('id') driverId: string,
-    @Body() body?: { dropOtp?: string },
   ) {
-    return this.ridesService.completeRide(rideId, driverId, body?.dropOtp);
+    return this.ridesService.completeRide(rideId, driverId);
   }
 
   // --- Common Actions ---
@@ -277,7 +276,7 @@ export class RidesController {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>RIDEXA SOS Live Tracking</title>
+        <title>Sawari SOS Live Tracking</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

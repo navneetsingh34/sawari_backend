@@ -89,34 +89,6 @@ export class Ride {
     isShared: boolean;
   };
 
-  // Parcel Fields
-  @Prop({ required: false })
-  senderName?: string;
-
-  @Prop({ required: false })
-  senderPhone?: string;
-
-  @Prop({ required: false })
-  receiverName?: string;
-
-  @Prop({ required: false })
-  receiverPhone?: string;
-
-  @Prop({ required: false })
-  parcelCategory?: string;
-
-  @Prop({ required: false })
-  parcelWeight?: number;
-
-  @Prop({ required: false, default: false })
-  fragile?: boolean;
-
-  @Prop({ required: false })
-  pickupOtp?: string;
-
-  @Prop({ required: false })
-  dropOtp?: string;
-
   // Financials
   @Prop({ required: true })
   suggestedFare: number;
@@ -146,9 +118,6 @@ export class Ride {
 
   @Prop({ required: false })
   scheduledAt?: Date;
-
-  @Prop({ default: false })
-  isDispatched?: boolean;
 
   // Cancellation
   @Prop({ required: false })

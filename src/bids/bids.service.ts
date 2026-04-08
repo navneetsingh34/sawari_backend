@@ -65,24 +65,27 @@ export class BidsService {
     }
 
     // 4. Check if driver already placed a bid on this ride
+    let savedBid;
     const existingBid = await this.bidModel.findOne({
       rideId,
       driverId,
       status: BidStatus.ACTIVE,
     });
+    
     if (existingBid) {
-      throw new ConflictException('You have already placed a bid on this ride');
+      existingBid.amount = amount;
+      existingBid.lastBidder = 'DRIVER';
+      savedBid = await existingBid.save();
+    } else {
+      const bid = new this.bidModel({
+        rideId,
+        driverId,
+        amount,
+        status: BidStatus.ACTIVE,
+        lastBidder: 'DRIVER',
+      });
+      savedBid = await bid.save();
     }
-
-    // 5. Create and save bid
-    const bid = new this.bidModel({
-      rideId,
-      driverId,
-      amount,
-      status: BidStatus.ACTIVE,
-    });
-
-    const savedBid = await bid.save();
 
     // Re-fetch bid with populated driver to send via websocket
     const populatedBid: any = await this.bidModel
@@ -141,18 +144,34 @@ export class BidsService {
   }
 
   /**
-   * Accept a Bid (Rider)
+   * Accept a Bid (Rider or Driver)
    */
   async acceptBid(
-    riderId: string,
+    userId: string,
     rideId: string,
     bidId: string,
   ): Promise<void> {
     const ride = await this.rideModel.findById(rideId);
-    // ... checks ...
+    if (!ride) throw new NotFoundException('Ride not found');
 
     const winningBid = await this.bidModel.findById(bidId);
-    // ... checks ...
+    if (!winningBid) throw new NotFoundException('Bid not found');
+
+    if (winningBid.status !== BidStatus.ACTIVE) {
+      throw new BadRequestException('Bid is not active');
+    }
+
+    // Role check
+    const isRider = ride.riderId.toString() === userId;
+    const isDriver = winningBid.driverId.toString() === userId;
+
+    if (!isRider && !isDriver) {
+      throw new ForbiddenException('You cannot accept this bid');
+    }
+
+    if (isDriver && winningBid.lastBidder !== 'RIDER') {
+      throw new BadRequestException('You can only accept a bid countered by the rider');
+    }
 
     // Check if winning driver already has an active ride
     const driverActiveRide = await this.rideModel.findOne({
@@ -192,6 +211,53 @@ export class BidsService {
     this.realtimeService.notifyBidResult(winningBid.driverId, true, rideId);
 
     // 3. Notify Losing Drivers? (Ideally yes, but skipped for brevity in mvp)
+  }
+
+  /**
+   * Counter a Bid (Driver or Rider)
+   */
+  async counterBid(bidId: string, amount: number, role: 'DRIVER' | 'RIDER'): Promise<BidDocument> {
+    const bid = await this.bidModel.findById(bidId);
+    if (!bid) {
+      throw new NotFoundException('Bid not found');
+    }
+    if (bid.status !== BidStatus.ACTIVE) {
+      throw new BadRequestException('Bid is not active to be countered');
+    }
+    
+    // Prevent self-countering sequentially without turn limit logic for now (optional but role check avoids obvious issues)
+    bid.amount = amount;
+    bid.lastBidder = role;
+    await bid.save();
+
+    const populatedBid: any = await this.bidModel
+      .findById(bid._id)
+      .populate('driverId', 'name phone')
+      .lean()
+      .exec();
+
+    // Attach basic vehicle structure for rider to display easily
+    if (role === 'DRIVER') {
+      try {
+        const driverProfile = await this.driversService.getProfile(bid.driverId.toString());
+        if (populatedBid && driverProfile) {
+          populatedBid.driverId.vehicle = {
+            type: driverProfile.vehicleInfo?.vehicleType || 'CAR',
+            make: driverProfile.vehicleInfo?.vehicleModel || '',
+            model: '', 
+            licensePlate: driverProfile.vehicleInfo?.vehicleNumber || '',
+            color: driverProfile.vehicleInfo?.vehicleColor || '',
+          };
+          populatedBid.driverId.rating = driverProfile.rating;
+        }
+      } catch (err) {}
+    }
+
+    // REALTIME: Notify counter bid
+    // This goes generally to both the rider and driver
+    this.realtimeService.notifyNewBid(bid.rideId, populatedBid || bid);
+
+    return populatedBid || bid;
   }
 
   /**

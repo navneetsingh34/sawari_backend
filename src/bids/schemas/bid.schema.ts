@@ -40,6 +40,9 @@ export class Bid {
   @Prop({ required: true, min: 0 })
   amount: number;
 
+  @Prop({ default: 'DRIVER', enum: ['DRIVER', 'RIDER'] })
+  lastBidder: string;
+
   @Prop({
     required: true,
     enum: BidStatus,

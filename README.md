@@ -1,4 +1,4 @@
-# RIDEXA Ride-Hailing Backend
+# Sawari Ride-Hailing Backend
 
 Production-grade NestJS backend foundation for a commercial ride-hailing application.
 

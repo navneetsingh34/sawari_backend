@@ -94,41 +94,6 @@ export class CreateRideDto {
   @Type(() => RideOptionsDto)
   rideOptions?: RideOptionsDto;
 
-  @ApiPropertyOptional({ description: 'Sender Name (Parcel)', example: 'John Doe' })
-  @IsOptional()
-  @IsString()
-  senderName?: string;
-
-  @ApiPropertyOptional({ description: 'Sender Phone (Parcel)', example: '9999999999' })
-  @IsOptional()
-  @IsString()
-  senderPhone?: string;
-
-  @ApiPropertyOptional({ description: 'Receiver Name (Parcel)', example: 'Jane Smith' })
-  @IsOptional()
-  @IsString()
-  receiverName?: string;
-
-  @ApiPropertyOptional({ description: 'Receiver Phone (Parcel)', example: '8888888888' })
-  @IsOptional()
-  @IsString()
-  receiverPhone?: string;
-
-  @ApiPropertyOptional({ description: 'Parcel Category', example: 'Documents' })
-  @IsOptional()
-  @IsString()
-  parcelCategory?: string;
-
-  @ApiPropertyOptional({ description: 'Parcel Weight (kg)', example: 2.5 })
-  @IsOptional()
-  @IsNumber()
-  parcelWeight?: number;
-
-  @ApiPropertyOptional({ description: 'Is Parcel Fragile?', example: true })
-  @IsOptional()
-  @IsBoolean()
-  fragile?: boolean;
-
   @ApiPropertyOptional({ description: 'Schedule this ride for later' })
   @IsOptional()
   @IsBoolean()

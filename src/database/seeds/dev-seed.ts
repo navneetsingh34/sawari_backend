@@ -43,7 +43,7 @@ async function bootstrap() {
 
   try {
     // 1. Create Admin
-    const adminEmail = 'admin@ridexa.com';
+    const adminEmail = 'admin@sawari.app';
     const existingAdmin = await usersService.findByEmail(adminEmail);
     if (!existingAdmin) {
       await usersService.create({
@@ -69,7 +69,7 @@ async function bootstrap() {
     }
 
     // 2. Create Driver
-    const driverEmail = 'driver@ridexa.com';
+    const driverEmail = 'driver@sawari.app';
     const existingDriver = await usersService.findByEmail(driverEmail);
     if (!existingDriver) {
       await usersService.create({
@@ -85,7 +85,7 @@ async function bootstrap() {
     }
 
     // 3. Create Rider
-    const riderEmail = 'rider@ridexa.com';
+    const riderEmail = 'rider@sawari.app';
     const existingRider = await usersService.findByEmail(riderEmail);
     if (!existingRider) {
       await usersService.create({

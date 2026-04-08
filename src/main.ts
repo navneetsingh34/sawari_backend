@@ -172,7 +172,7 @@ async function bootstrap() {
 
   if (swaggerEnabled) {
     const config = new DocumentBuilder()
-      .setTitle('RIDEXA Ride-Hailing API')
+      .setTitle('Sawari Ride-Hailing API')
       .setDescription(
         'Production-grade REST API for ride-hailing application. ' +
           'This API provides endpoints for user authentication, ride management, ' +
@@ -199,7 +199,7 @@ async function bootstrap() {
 
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup(swaggerPath, app, document, {
-      customSiteTitle: 'RIDEXA API Documentation',
+      customSiteTitle: 'Sawari API Documentation',
       customCss: '.swagger-ui .topbar { display: none }',
       swaggerOptions: {
         persistAuthorization: true,
@@ -218,7 +218,10 @@ async function bootstrap() {
   // ============================================
   // START SERVER
   // ============================================
-  const port = configService.get<number>('app.port') || 3000;
+ const port =
+  process.env.PORT ||
+  configService.get<number>('app.port') ||
+  3000;
   const env = configService.get<string>('app.env') || 'development';
 
   // Listen on 0.0.0.0 to accept connections from outside the container

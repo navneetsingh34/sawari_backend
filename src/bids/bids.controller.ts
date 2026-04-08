@@ -72,8 +72,8 @@ export class BidsController {
   }
 
   @Patch(':bidId/accept')
-  @Roles(UserRole.RIDER)
-  @ApiOperation({ summary: 'Accept a bid (Rider only)' })
+  @Roles(UserRole.RIDER, UserRole.DRIVER)
+  @ApiOperation({ summary: 'Accept a bid (Rider) or Counter-bid (Driver)' })
   @ApiResponse({ status: 200, description: 'Bid accepted, ride assigned' })
   async acceptBid(
     @Param('bidId') bidId: string,
@@ -84,5 +84,23 @@ export class BidsController {
       throw new BadRequestException('Invalid ID');
     }
     return this.bidsService.acceptBid(riderId, rideId, bidId);
+  }
+
+  @Patch(':bidId/counter')
+  @Roles(UserRole.DRIVER, UserRole.RIDER)
+  @ApiOperation({ summary: 'Counter an existing bid (Driver or Rider)' })
+  @ApiResponse({ status: 200, description: 'Bid countered successfully' })
+  async counterBid(
+    @Param('bidId') bidId: string,
+    @Body('amount') amount: number,
+    @CurrentUser('role') role: string,
+  ) {
+    if (!isValidObjectId(bidId)) {
+      throw new BadRequestException('Invalid Bid ID');
+    }
+    if (!amount || amount <= 0) {
+      throw new BadRequestException('Valid amount is required');
+    }
+    return this.bidsService.counterBid(bidId, amount, role as 'DRIVER' | 'RIDER');
   }
 }

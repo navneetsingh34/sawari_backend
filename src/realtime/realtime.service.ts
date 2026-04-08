@@ -63,6 +63,12 @@ export class RealtimeService {
   notifyNewBid(rideId: string, bid: any) {
     if (!this.server) return;
     this.server.to(`ride:${rideId}`).emit(RealtimeEvents.BID_NEW, bid);
+    
+    // Also explicitly notify the driver so they see counter bids from the rider
+    if (bid && bid.driverId) {
+      const driverIdStr = bid.driverId._id ? bid.driverId._id.toString() : bid.driverId.toString();
+      this.server.to(`user:${driverIdStr}`).emit(RealtimeEvents.BID_NEW, bid);
+    }
   }
 
   /**
